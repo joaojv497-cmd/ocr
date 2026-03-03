@@ -1,24 +1,26 @@
-# OCR Service
+# README.md
 
-Serviço de OCR com chunking inteligente usando IA.
+Overview
 
-## Features
+This repository adds a modular, open-source OCR pipeline focused on Brazilian legal documents (petição inicial, contestação, sentença, recursos). The pipeline:
 
-- OCR de PDFs com Tesseract
-- Chunking inteligente com IA (semantic_ai)
-- Detecção automática de áreas do documento
-- Streaming gRPC
+- Detects whether a PDF is digital or scanned.
+- Extracts text directly from digital PDFs using pdfplumber while preserving coordinates.
+- Converts scanned PDFs to images and runs OCR using Tesseract (pytesseract) with coordinated output.
+- Uses OpenCV for preprocessing (binarization, deskew, denoising).
+- Reconstructs layout (bounding boxes, blocks, pages) and reading order.
+- Removes headers/footers via heuristics.
+- Performs semantic section identification (rule-based + pluggable ML model).
+- Produces structured JSON output ready for embeddings / RAG.
 
-## Instalação
+Usage
 
-```bash
-# Instalar Tesseract
-sudo apt-get install tesseract-ocr tesseract-ocr-por  # Ubuntu/Debian
-brew install tesseract tesseract-lang                  # macOS
+Install dependencies (recommend a virtualenv):
 
-# Instalar dependências
-poetry install
+pip install -r requirements.txt
 
-# Configurar
-cp .env.example .env
-# Editar .env
+Install Tesseract on your system and ensure `tesseract` is on PATH.
+
+Example:
+
+python cli.py process input.pdf output.json
