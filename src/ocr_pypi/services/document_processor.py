@@ -78,6 +78,9 @@ class DocumentProcessor:
             - min_chunk_size: minimum chunk chars (semantic/paragraph)
             - embedding_model: sentence-transformer model name (semantic strategy)
             - similarity_threshold: cosine threshold (semantic strategy)
+            - preserve_structure: preserve document hierarchy (advanced)
+            - max_chunks_per_section: max chunks per section (advanced)
+            - metadata_fields: extra metadata fields to include (dict, from chunk_metadata_fields JSON)
 
         Yields:
             Dict with 'type' in ('progress', 'chunk', 'complete', 'error')

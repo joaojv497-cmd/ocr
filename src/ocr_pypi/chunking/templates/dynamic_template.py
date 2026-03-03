@@ -19,6 +19,7 @@ class DynamicTemplate(DocumentTemplate):
 
     def __init__(self, definition: Dict[str, Any]) -> None:
         self._validate(definition)
+        self._definition: Dict[str, Any] = definition
         self._name: str = definition["template_name"]
         self._description: str = definition.get(
             "description", f"Custom template: {self._name}"
@@ -40,6 +41,14 @@ class DynamicTemplate(DocumentTemplate):
     @property
     def sections(self) -> List[Dict[str, Any]]:
         return self._sections
+
+    @property
+    def is_custom(self) -> bool:
+        return True
+
+    @property
+    def document_types(self) -> str:
+        return self._definition.get("document_types", "")
 
     # ------------------------------------------------------------------
     # Validation

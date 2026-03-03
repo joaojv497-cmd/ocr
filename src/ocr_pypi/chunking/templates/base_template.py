@@ -26,6 +26,16 @@ class DocumentTemplate(ABC):
         """
         pass
 
+    @property
+    def is_custom(self) -> bool:
+        """Indica se é um template customizado (dinâmico)."""
+        return False
+
+    @property
+    def document_types(self) -> str:
+        """Tipos de documento suportados pelo template (JSON string)."""
+        return ""
+
     def build_prompt(self, extracted_text: str) -> str:
         """Constrói o prompt completo para a LLM"""
         sections_desc = self._format_sections()
