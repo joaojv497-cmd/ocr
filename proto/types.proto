@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package ocr;
+
+
+enum OCRStatus {
+  IDLE_STATUS = 0;
+  PROCESSING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+}
+
+enum OCRStage {
+  IDLE = 0;
+  VALIDATING = 1;
+  DOWNLOADING = 2;
+  EXTRACTING = 3;
+  CHUNKING = 4;
+  FINISHED = 5;
+}
+
+enum HealthStatus {
+  HEALTH_NOT_SERVING = 0;
+  HEALTH_SERVING = 1;
+}
