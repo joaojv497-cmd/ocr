@@ -20,7 +20,7 @@ class Settings:
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
-    DEFAULT_TEMPLATE: str = os.getenv("DEFAULT_TEMPLATE", "generico")
+    DEFAULT_TEMPLATE: str = os.getenv("DEFAULT_TEMPLATE", "")  # Vazio - template deve vir do request
 
     # Chunking strategy defaults
     DEFAULT_CHUNK_STRATEGY: str = os.getenv("DEFAULT_CHUNK_STRATEGY", "llm")
