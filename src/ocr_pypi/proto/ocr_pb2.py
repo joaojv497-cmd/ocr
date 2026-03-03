@@ -25,45 +25,51 @@ _sym_db = _symbol_database.Default()
 from ocr_pypi.proto import types_pb2 as types__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tocr.proto\x12\x03ocr\x1a\x0btypes.proto\"q\n\x0fTemplateSection\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x10\n\x08required\x18\x03 \x01(\x08\x12)\n\x0bsubsections\x18\x04 \x03(\x0b\x32\x14.ocr.TemplateSection\"]\n\x10\x44ocumentTemplate\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12&\n\x08sections\x18\x03 \x03(\x0b\x32\x14.ocr.TemplateSection\"f\n\tLLMConfig\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\r\n\x05model\x18\x02 \x01(\t\x12\x0f\n\x07\x61pi_key\x18\x03 \x01(\t\x12\x13\n\x0btemperature\x18\x04 \x01(\x02\x12\x12\n\nmax_tokens\x18\x05 \x01(\x05\"\xf7\x01\n\x16ProcessDocumentRequest\x12\x15\n\rdocument_guid\x18\x01 \x01(\t\x12\x0e\n\x06\x62ucket\x18\x02 \x01(\t\x12\x10\n\x08\x66ile_key\x18\x03 \x01(\t\x12\x10\n\x08language\x18\x04 \x01(\t\x12\x17\n\x0f\x65nable_chunking\x18\x05 \x01(\x08\x12\x17\n\rtemplate_name\x18\x06 \x01(\tH\x00\x12)\n\x08template\x18\x07 \x01(\x0b\x32\x15.ocr.DocumentTemplateH\x00\x12\"\n\nllm_config\x18\x08 \x01(\x0b\x32\x0e.ocr.LLMConfigB\x11\n\x0ftemplate_option\"\x97\x02\n\x17ProcessDocumentResponse\x12\x1e\n\x06status\x18\x01 \x01(\x0e\x32\x0e.ocr.OCRStatus\x12\x1c\n\x05stage\x18\x02 \x01(\x0e\x32\r.ocr.OCRStage\x12\x10\n\x08progress\x18\x03 \x01(\x05\x12\x13\n\x0b\x63hunk_index\x18\x04 \x01(\x05\x12\x14\n\x0cpage_numbers\x18\x05 \x03(\x05\x12\x0c\n\x04text\x18\x06 \x01(\t\x12\x16\n\x0e\x63hunk_metadata\x18\x07 \x01(\t\x12\x14\n\x0ctotal_chunks\x18\x08 \x01(\x05\x12\x17\n\x0f\x63hunking_method\x18\t \x01(\t\x12\x15\n\rtemplate_used\x18\n \x01(\t\x12\x15\n\rerror_message\x18\x0b \x01(\t\"\x16\n\x14ListProvidersRequest\"*\n\x15ListProvidersResponse\x12\x11\n\tproviders\x18\x01 \x03(\t\"\x16\n\x14ListTemplatesRequest\"\\\n\x0cTemplateInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x11\n\tis_custom\x18\x03 \x01(\x08\x12\x16\n\x0e\x64ocument_types\x18\x04 \x01(\t\"=\n\x15ListTemplatesResponse\x12$\n\ttemplates\x18\x01 \x03(\x0b\x32\x11.ocr.TemplateInfo\";\n\x17ValidateDocumentRequest\x12\x0e\n\x06\x62ucket\x18\x01 \x01(\t\x12\x10\n\x08\x66ile_key\x18\x02 \x01(\t\"N\n\x18ValidateDocumentResponse\x12\x0e\n\x06\x65xists\x18\x01 \x01(\x08\x12\x11\n\tsupported\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\"B\n\x17ValidateTemplateRequest\x12\'\n\x08template\x18\x01 \x01(\x0b\x32\x15.ocr.DocumentTemplate\"x\n\x18ValidateTemplateResponse\x12\x10\n\x08is_valid\x18\x01 \x01(\x08\x12\x1a\n\x12validation_message\x18\x02 \x01(\t\x12\x16\n\x0emissing_fields\x18\x03 \x03(\t\x12\x16\n\x0einvalid_fields\x18\x04 \x03(\t\"\x14\n\x12HealthCheckRequest\"I\n\x13HealthCheckResponse\x12!\n\x06status\x18\x01 \x01(\x0e\x32\x11.ocr.HealthStatus\x12\x0f\n\x07message\x18\x02 \x01(\t2\xd0\x03\n\nOCRService\x12N\n\x0fProcessDocument\x12\x1b.ocr.ProcessDocumentRequest\x1a\x1c.ocr.ProcessDocumentResponse0\x01\x12\x46\n\rListProviders\x12\x19.ocr.ListProvidersRequest\x1a\x1a.ocr.ListProvidersResponse\x12\x46\n\rListTemplates\x12\x19.ocr.ListTemplatesRequest\x1a\x1a.ocr.ListTemplatesResponse\x12O\n\x10ValidateDocument\x12\x1c.ocr.ValidateDocumentRequest\x1a\x1d.ocr.ValidateDocumentResponse\x12O\n\x10ValidateTemplate\x12\x1c.ocr.ValidateTemplateRequest\x1a\x1d.ocr.ValidateTemplateResponse\x12@\n\x0bHealthCheck\x12\x17.ocr.HealthCheckRequest\x1a\x18.ocr.HealthCheckResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tocr.proto\x12\x03ocr\x1a\x0btypes.proto\"q\n\x0fTemplateSection\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x10\n\x08required\x18\x03 \x01(\x08\x12)\n\x0bsubsections\x18\x04 \x03(\x0b\x32\x14.ocr.TemplateSection\"]\n\x10\x44ocumentTemplate\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12&\n\x08sections\x18\x03 \x03(\x0b\x32\x14.ocr.TemplateSection\"x\n\tLLMConfig\x12\"\n\x08provider\x18\x01 \x01(\x0e\x32\x10.ocr.LLMProvider\x12\r\n\x05model\x18\x02 \x01(\t\x12\x0f\n\x07\x61pi_key\x18\x03 \x01(\t\x12\x13\n\x0btemperature\x18\x04 \x01(\x02\x12\x12\n\nmax_tokens\x18\x05 \x01(\x05\"\x89\x02\n\x16ProcessDocumentRequest\x12\x15\n\rdocument_guid\x18\x01 \x01(\t\x12\x0e\n\x06\x62ucket\x18\x02 \x01(\t\x12\x10\n\x08\x66ile_key\x18\x03 \x01(\t\x12\"\n\x08language\x18\x04 \x01(\x0e\x32\x10.ocr.OCRLanguage\x12\x17\n\x0f\x65nable_chunking\x18\x05 \x01(\x08\x12\x17\n\rtemplate_name\x18\x06 \x01(\tH\x00\x12)\n\x08template\x18\x07 \x01(\x0b\x32\x15.ocr.DocumentTemplateH\x00\x12\"\n\nllm_config\x18\x08 \x01(\x0b\x32\x0e.ocr.LLMConfigB\x11\n\x0ftemplate_option\"\xac\x02\n\x17ProcessDocumentResponse\x12\x1e\n\x06status\x18\x01 \x01(\x0e\x32\x0e.ocr.OCRStatus\x12\x1c\n\x05stage\x18\x02 \x01(\x0e\x32\r.ocr.OCRStage\x12\x10\n\x08progress\x18\x03 \x01(\x05\x12\x13\n\x0b\x63hunk_index\x18\x04 \x01(\x05\x12\x14\n\x0cpage_numbers\x18\x05 \x03(\x05\x12\x0c\n\x04text\x18\x06 \x01(\t\x12\x16\n\x0e\x63hunk_metadata\x18\x07 \x01(\t\x12\x14\n\x0ctotal_chunks\x18\x08 \x01(\x05\x12,\n\x0f\x63hunking_method\x18\t \x01(\x0e\x32\x13.ocr.ChunkingMethod\x12\x15\n\rtemplate_used\x18\n \x01(\t\x12\x15\n\rerror_message\x18\x0b \x01(\t\"\x16\n\x14ListProvidersRequest\"*\n\x15ListProvidersResponse\x12\x11\n\tproviders\x18\x01 \x03(\t\"\x16\n\x14ListTemplatesRequest\"\\\n\x0cTemplateInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x11\n\tis_custom\x18\x03 \x01(\x08\x12\x16\n\x0e\x64ocument_types\x18\x04 \x01(\t\"=\n\x15ListTemplatesResponse\x12$\n\ttemplates\x18\x01 \x03(\x0b\x32\x11.ocr.TemplateInfo\";\n\x17ValidateDocumentRequest\x12\x0e\n\x06\x62ucket\x18\x01 \x01(\t\x12\x10\n\x08\x66ile_key\x18\x02 \x01(\t\"N\n\x18ValidateDocumentResponse\x12\x0e\n\x06\x65xists\x18\x01 \x01(\x08\x12\x11\n\tsupported\x18\x02 \x01(\x08\x12\x0f\n\x07message\x18\x03 \x01(\t\"B\n\x17ValidateTemplateRequest\x12\'\n\x08template\x18\x01 \x01(\x0b\x32\x15.ocr.DocumentTemplate\"x\n\x18ValidateTemplateResponse\x12\x10\n\x08is_valid\x18\x01 \x01(\x08\x12\x1a\n\x12validation_message\x18\x02 \x01(\t\x12\x16\n\x0emissing_fields\x18\x03 \x03(\t\x12\x16\n\x0einvalid_fields\x18\x04 \x03(\t\"\x14\n\x12HealthCheckRequest\"I\n\x13HealthCheckResponse\x12!\n\x06status\x18\x01 \x01(\x0e\x32\x11.ocr.HealthStatus\x12\x0f\n\x07message\x18\x02 \x01(\t*`\n\x0bLLMProvider\x12\x1c\n\x18LLM_PROVIDER_UNSPECIFIED\x10\x00\x12\x17\n\x13LLM_PROVIDER_OPENAI\x10\x01\x12\x1a\n\x16LLM_PROVIDER_ANTHROPIC\x10\x02*\xc8\x01\n\x0bOCRLanguage\x12\x1c\n\x18OCR_LANGUAGE_UNSPECIFIED\x10\x00\x12\x1b\n\x17OCR_LANGUAGE_PORTUGUESE\x10\x01\x12\x18\n\x14OCR_LANGUAGE_ENGLISH\x10\x02\x12\x18\n\x14OCR_LANGUAGE_SPANISH\x10\x03\x12\x17\n\x13OCR_LANGUAGE_FRENCH\x10\x04\x12\x17\n\x13OCR_LANGUAGE_GERMAN\x10\x05\x12\x18\n\x14OCR_LANGUAGE_ITALIAN\x10\x06*\xa3\x01\n\x0e\x43hunkingMethod\x12\x1f\n\x1b\x43HUNKING_METHOD_UNSPECIFIED\x10\x00\x12\x17\n\x13\x43HUNKING_METHOD_LLM\x10\x01\x12\x1c\n\x18\x43HUNKING_METHOD_SEMANTIC\x10\x02\x12\x1d\n\x19\x43HUNKING_METHOD_PARAGRAPH\x10\x03\x12\x1a\n\x16\x43HUNKING_METHOD_HYBRID\x10\x04\x32\xd0\x03\n\nOCRService\x12N\n\x0fProcessDocument\x12\x1b.ocr.ProcessDocumentRequest\x1a\x1c.ocr.ProcessDocumentResponse0\x01\x12\x46\n\rListProviders\x12\x19.ocr.ListProvidersRequest\x1a\x1a.ocr.ListProvidersResponse\x12\x46\n\rListTemplates\x12\x19.ocr.ListTemplatesRequest\x1a\x1a.ocr.ListTemplatesResponse\x12O\n\x10ValidateDocument\x12\x1c.ocr.ValidateDocumentRequest\x1a\x1d.ocr.ValidateDocumentResponse\x12O\n\x10ValidateTemplate\x12\x1c.ocr.ValidateTemplateRequest\x1a\x1d.ocr.ValidateTemplateResponse\x12@\n\x0bHealthCheck\x12\x17.ocr.HealthCheckRequest\x1a\x18.ocr.HealthCheckResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ocr_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
+  _globals['_LLMPROVIDER']._serialized_start=1611
+  _globals['_LLMPROVIDER']._serialized_end=1707
+  _globals['_OCRLANGUAGE']._serialized_start=1710
+  _globals['_OCRLANGUAGE']._serialized_end=1910
+  _globals['_CHUNKINGMETHOD']._serialized_start=1913
+  _globals['_CHUNKINGMETHOD']._serialized_end=2076
   _globals['_TEMPLATESECTION']._serialized_start=31
   _globals['_TEMPLATESECTION']._serialized_end=144
   _globals['_DOCUMENTTEMPLATE']._serialized_start=146
   _globals['_DOCUMENTTEMPLATE']._serialized_end=239
   _globals['_LLMCONFIG']._serialized_start=241
-  _globals['_LLMCONFIG']._serialized_end=343
-  _globals['_PROCESSDOCUMENTREQUEST']._serialized_start=346
-  _globals['_PROCESSDOCUMENTREQUEST']._serialized_end=593
-  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_start=596
-  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_end=875
-  _globals['_LISTPROVIDERSREQUEST']._serialized_start=877
-  _globals['_LISTPROVIDERSREQUEST']._serialized_end=899
-  _globals['_LISTPROVIDERSRESPONSE']._serialized_start=901
-  _globals['_LISTPROVIDERSRESPONSE']._serialized_end=943
-  _globals['_LISTTEMPLATESREQUEST']._serialized_start=945
-  _globals['_LISTTEMPLATESREQUEST']._serialized_end=967
-  _globals['_TEMPLATEINFO']._serialized_start=969
-  _globals['_TEMPLATEINFO']._serialized_end=1061
-  _globals['_LISTTEMPLATESRESPONSE']._serialized_start=1063
-  _globals['_LISTTEMPLATESRESPONSE']._serialized_end=1124
-  _globals['_VALIDATEDOCUMENTREQUEST']._serialized_start=1126
-  _globals['_VALIDATEDOCUMENTREQUEST']._serialized_end=1185
-  _globals['_VALIDATEDOCUMENTRESPONSE']._serialized_start=1187
-  _globals['_VALIDATEDOCUMENTRESPONSE']._serialized_end=1265
-  _globals['_VALIDATETEMPLATEREQUEST']._serialized_start=1267
-  _globals['_VALIDATETEMPLATEREQUEST']._serialized_end=1333
-  _globals['_VALIDATETEMPLATERESPONSE']._serialized_start=1335
-  _globals['_VALIDATETEMPLATERESPONSE']._serialized_end=1455
-  _globals['_HEALTHCHECKREQUEST']._serialized_start=1457
-  _globals['_HEALTHCHECKREQUEST']._serialized_end=1477
-  _globals['_HEALTHCHECKRESPONSE']._serialized_start=1479
-  _globals['_HEALTHCHECKRESPONSE']._serialized_end=1552
-  _globals['_OCRSERVICE']._serialized_start=1555
-  _globals['_OCRSERVICE']._serialized_end=2019
+  _globals['_LLMCONFIG']._serialized_end=361
+  _globals['_PROCESSDOCUMENTREQUEST']._serialized_start=364
+  _globals['_PROCESSDOCUMENTREQUEST']._serialized_end=629
+  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_start=632
+  _globals['_PROCESSDOCUMENTRESPONSE']._serialized_end=932
+  _globals['_LISTPROVIDERSREQUEST']._serialized_start=934
+  _globals['_LISTPROVIDERSREQUEST']._serialized_end=956
+  _globals['_LISTPROVIDERSRESPONSE']._serialized_start=958
+  _globals['_LISTPROVIDERSRESPONSE']._serialized_end=1000
+  _globals['_LISTTEMPLATESREQUEST']._serialized_start=1002
+  _globals['_LISTTEMPLATESREQUEST']._serialized_end=1024
+  _globals['_TEMPLATEINFO']._serialized_start=1026
+  _globals['_TEMPLATEINFO']._serialized_end=1118
+  _globals['_LISTTEMPLATESRESPONSE']._serialized_start=1120
+  _globals['_LISTTEMPLATESRESPONSE']._serialized_end=1181
+  _globals['_VALIDATEDOCUMENTREQUEST']._serialized_start=1183
+  _globals['_VALIDATEDOCUMENTREQUEST']._serialized_end=1242
+  _globals['_VALIDATEDOCUMENTRESPONSE']._serialized_start=1244
+  _globals['_VALIDATEDOCUMENTRESPONSE']._serialized_end=1322
+  _globals['_VALIDATETEMPLATEREQUEST']._serialized_start=1324
+  _globals['_VALIDATETEMPLATEREQUEST']._serialized_end=1390
+  _globals['_VALIDATETEMPLATERESPONSE']._serialized_start=1392
+  _globals['_VALIDATETEMPLATERESPONSE']._serialized_end=1512
+  _globals['_HEALTHCHECKREQUEST']._serialized_start=1514
+  _globals['_HEALTHCHECKREQUEST']._serialized_end=1534
+  _globals['_HEALTHCHECKRESPONSE']._serialized_start=1536
+  _globals['_HEALTHCHECKRESPONSE']._serialized_end=1609
+  _globals['_OCRSERVICE']._serialized_start=2079
+  _globals['_OCRSERVICE']._serialized_end=2543
 # @@protoc_insertion_point(module_scope)
