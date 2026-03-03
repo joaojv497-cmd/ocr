@@ -13,8 +13,8 @@ except ImportError:
     _TRANSFORMERS_AVAILABLE = False
     logger.warning("sentence-transformers not available; using simple chunker.")
 
-DEFAULT_MODEL = "neuralmind/bert-base-portuguese-cased"
-FALLBACK_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+DEFAULT_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+PORTUGUESE_MODEL = "neuralmind/bert-base-portuguese-cased"
 SIMILARITY_THRESHOLD = 0.7
 MAX_CHUNK_CHARS = 4000
 MIN_CHUNK_CHARS = 200
@@ -31,7 +31,7 @@ class SemanticChunker:
 
     def __init__(self, model_name: Optional[str] = None):
         self._model: Optional[Any] = None
-        self._model_name = model_name or FALLBACK_MODEL
+        self._model_name = model_name or DEFAULT_MODEL
 
     def _load_model(self) -> bool:
         """Lazy-load the embedding model."""

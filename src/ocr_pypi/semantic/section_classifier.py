@@ -8,6 +8,7 @@ from ocr_pypi.semantic.legal_patterns import match_section_type
 logger = logging.getLogger(__name__)
 
 TITLE_MAX_LENGTH = 150  # Characters - longer texts are unlikely to be titles
+TEXT_SAMPLE_LENGTH = TITLE_MAX_LENGTH + 50  # Characters to sample from longer blocks
 
 
 class SectionClassifier:
@@ -74,8 +75,8 @@ class SectionClassifier:
                 except ValueError:
                     pass
 
-        # Try matching longer text (first 200 chars)
-        matches = match_section_type(text[:200])
+        # Try matching longer text (first TEXT_SAMPLE_LENGTH chars)
+        matches = match_section_type(text[:TEXT_SAMPLE_LENGTH])
         if matches:
             section_name = matches[0]
             try:

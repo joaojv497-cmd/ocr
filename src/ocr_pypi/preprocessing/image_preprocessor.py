@@ -79,7 +79,7 @@ class ImagePreprocessor:
         if not _CV2_AVAILABLE:
             return image.filter(ImageFilter.MedianFilter(size=3))
         cv_image = self._to_gray_cv2(image)
-        kernel = np.ones((1, 1), np.uint8)
+        kernel = np.ones((3, 3), np.uint8)
         opened = cv2.morphologyEx(cv_image, cv2.MORPH_OPEN, kernel)
         return Image.fromarray(opened)
 

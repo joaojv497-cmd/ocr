@@ -56,7 +56,8 @@ class ReadingOrderReconstructor:
         mid_page = page_width / 2
         left_count = sum(1 for x in mid_x_values if x < mid_page * (1 - COLUMN_GAP_THRESHOLD))
         right_count = sum(1 for x in mid_x_values if x > mid_page * (1 + COLUMN_GAP_THRESHOLD))
-        if left_count > 0 and right_count > 0:
+        min_column_blocks = max(2, len(blocks) // 4)
+        if left_count >= min_column_blocks and right_count >= min_column_blocks:
             return 2
         return 1
 

@@ -133,9 +133,15 @@ class JSONFormatter:
             meta = chunk.metadata or {}
             entities = meta.get("entities", [])
             if isinstance(entities, list):
-                pessoas.extend(
-                    e for e in entities if isinstance(e, str) and ("Autor" in e or "Réu" in e)
-                )
+                for e in entities:
+                    if not isinstance(e, str):
+                        continue
+                    if "Autor" in e or "Réu" in e:
+                        pessoas.append(e)
+                    elif "Lei" in e or "art." in e or "CF" in e:
+                        legislacao.append(e)
+                    elif "R$" in e or "reais" in e.lower():
+                        valores.append(e)
 
         return {
             "pessoas": list(set(pessoas)),

@@ -1,9 +1,7 @@
 """Document processor orchestrating the full OCR pipeline."""
 import os
 import time
-import uuid
 import logging
-from datetime import datetime, timezone
 from typing import Generator, List, Dict, Any, Optional
 
 import fitz
