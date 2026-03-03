@@ -69,7 +69,7 @@ class LLMChunker:
         """
         # Resolve template
         if template is None:
-            name = template_name or settings.DEFAULT_TEMPLATE
+            name = template_name or None
             template = TemplateRegistry.get(name)
 
         # 1. Combina texto de todas as páginas
@@ -115,7 +115,7 @@ class LLMChunker:
         Útil quando se quer acessar a estrutura hierárquica completa.
         """
         if template is None:
-            name = template_name or settings.DEFAULT_TEMPLATE
+            name = template_name or None
             template = TemplateRegistry.get(name)
 
         full_text = self._combine_pages(pages)

@@ -68,12 +68,15 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
         language = PROTO_TO_LANGUAGE.get(request.language, "por")
         processor = DocumentProcessor(language=language)
 
-        # Resolve template from oneof template_option
+        # Resolve chunking method
+        chunking_method_proto = request.chunking_method
+        chunk_strategy = PROTO_TO_CHUNKING.get(chunking_method_proto, "llm")
+
+        # Resolve template from request.template (regular field, not oneof)
         template_instance = None
         template_name = None
-        which_template = request.WhichOneof("template_option")
-        if which_template == "template":
-            template_proto = request.template
+        template_proto = request.template
+        if template_proto.name:
             definition = {
                 "template_name": template_proto.name,
                 "description": template_proto.description,
@@ -84,24 +87,15 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                 logger.info(f"Dynamic template registered: {template_instance.name}")
             except ValueError as e:
                 logger.warning(f"Invalid template in request: {e}")
-        elif which_template == "template_name":
-            template_name = request.template_name or None
 
-        # Extract LLM config
+        # Extract LLM config (API key ONLY from environment)
         llm_config = request.llm_config
-        api_key_from_env = os.environ.get("LLM_API_KEY", "")
-        api_key_from_request = llm_config.api_key or None
-        if api_key_from_request and api_key_from_env:
-            logger.warning(
-                "API key provided in request, but using environment configuration "
-                "for authentication."
-            )
-        llm_api_key = api_key_from_env or api_key_from_request or None
+        llm_api_key = os.environ.get("LLM_API_KEY") or None
 
         # Monta chunk_options a partir do request
         chunk_options = {
             "enable_chunking": True,  # SEMPRE True - chunks são obrigatórios
-            "chunk_strategy": "llm",  # SEMPRE LLM
+            "chunk_strategy": chunk_strategy,
 
             # Template
             "template": template_name,
@@ -115,16 +109,23 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             "llm_max_tokens": llm_config.max_tokens if llm_config.max_tokens > 0 else None,
         }
 
-        # Validar que template foi fornecido
-        if not template_instance and not template_name:
-            context.abort(
-                grpc.StatusCode.INVALID_ARGUMENT,
-                "Template é obrigatório. Envie 'template' (definição completa) ou 'template_name' (nome registrado)."
-            )
+        # Validar que template e LLM config foram fornecidos (somente para LLM)
+        if chunk_strategy == "llm":
+            if not template_instance and not template_name:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "Template é obrigatório para chunking LLM. Envie a definição completa no campo 'template'."
+                )
+            if not llm_api_key:
+                context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "Variável de ambiente LLM_API_KEY não configurada."
+                )
 
         logger.info(
-            f"ProcessDocument: provider={chunk_options['llm_provider'] or 'default'}, "
-            f"template={chunk_options['template'] or (template_instance.name if template_instance else 'default')}, "
+            f"ProcessDocument: strategy={chunk_strategy}, "
+            f"provider={chunk_options['llm_provider'] or 'default'}, "
+            f"template={chunk_options['template'] or (template_instance.name if template_instance else 'none')}, "
             f"model={chunk_options['llm_model'] or 'default'}"
         )
 
@@ -132,7 +133,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             template_instance.name if template_instance
             else (template_name or "")
         )
-        chunking_method = "llm"
 
         for result in processor.process(request.bucket, request.file_key, chunk_options):
             if not context.is_active():
@@ -166,7 +166,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
-                    chunking_method=CHUNKING_TO_PROTO.get(chunking_method, ocr_pb2.CHUNKING_METHOD_LLM),
+                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, ocr_pb2.CHUNKING_METHOD_LLM),
                     template_used=template_used,
                 )
 

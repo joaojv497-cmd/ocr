@@ -65,7 +65,6 @@ class DocumentProcessor:
 
         chunk_options may contain (all optional, fallback to env/settings):
             - chunk_strategy: 'llm' (default) | 'semantic' | 'paragraph' | 'hybrid'
-            - enable_chunking: bool (default True); if False, skip chunking entirely
             - template: template name
             - template_instance: pre-built DocumentTemplate instance (overrides template)
             - llm_provider: provider name
@@ -252,7 +251,7 @@ class DocumentProcessor:
         }
 
         chunker = LLMChunker(**provider_kwargs)
-        template_name = chunk_options.get("template") or settings.DEFAULT_TEMPLATE
+        template_name = chunk_options.get("template") or None
 
         yield {
             "type": "progress",

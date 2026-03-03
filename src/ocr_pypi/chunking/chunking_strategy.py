@@ -81,7 +81,7 @@ class ChunkingStrategy:
 
         chunker = LLMChunker(**provider_kwargs)
 
-        template_name = chunk_options.get("template") or settings.DEFAULT_TEMPLATE
+        template_name = chunk_options.get("template") or None
         template_instance = chunk_options.get("template_instance")
 
         yield {
