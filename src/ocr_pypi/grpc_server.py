@@ -1,3 +1,4 @@
+import grpc
 import json
 import os
 from typing import Any, Dict
@@ -99,7 +100,8 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
         # Monta chunk_options a partir do request
         chunk_options = {
-            "enable_chunking": request.enable_chunking,
+            "enable_chunking": True,  # SEMPRE True - chunks são obrigatórios
+            "chunk_strategy": "llm",  # SEMPRE LLM
 
             # Template
             "template": template_name,
@@ -112,6 +114,13 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             "llm_temperature": llm_config.temperature if llm_config.temperature > 0 else None,
             "llm_max_tokens": llm_config.max_tokens if llm_config.max_tokens > 0 else None,
         }
+
+        # Validar que template foi fornecido
+        if not template_instance and not template_name:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                "Template é obrigatório. Envie 'template' (definição completa) ou 'template_name' (nome registrado)."
+            )
 
         logger.info(
             f"ProcessDocument: provider={chunk_options['llm_provider'] or 'default'}, "

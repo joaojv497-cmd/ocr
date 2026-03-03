@@ -41,14 +41,12 @@ class TemplateRegistry:
         Raises:
             ValueError: Se o template não estiver registrado
         """
-        cls._ensure_defaults_registered()
-
         key = name.lower()
         if key not in cls._registry:
-            available = ", ".join(cls._registry.keys())
             raise ValueError(
-                f"Template '{name}' não registrado. "
-                f"Disponíveis: {available}"
+                f"Template '{name}' não encontrado. "
+                f"Nenhum template padrão disponível. "
+                f"Envie um template customizado via request (campo 'template')."
             )
         return cls._registry[key]
 
@@ -69,7 +67,6 @@ class TemplateRegistry:
         """
         from ocr_pypi.chunking.templates.dynamic_template import DynamicTemplate
 
-        cls._ensure_defaults_registered()
         template = DynamicTemplate(definition)
         cls._registry[template.name.lower()] = template
         logger.info(f"Dynamic template registered: {template.name}")
@@ -78,27 +75,9 @@ class TemplateRegistry:
     @classmethod
     def list_templates(cls) -> List[str]:
         """Lista todos os templates registrados"""
-        cls._ensure_defaults_registered()
         return list(cls._registry.keys())
 
     @classmethod
     def _ensure_defaults_registered(cls) -> None:
-        """Registra os templates padrão se ainda não foram registrados"""
-        if cls._registry:
-            return
-
-        from ocr_pypi.chunking.templates.generico import GenericoTemplate
-        from ocr_pypi.chunking.templates.peticao_inicial import PeticaoInicialTemplate
-        from ocr_pypi.chunking.templates.contrato import ContratoTemplate
-        from ocr_pypi.chunking.templates.sentenca import SentencaTemplate
-        from ocr_pypi.chunking.templates.lei import LeiTemplate
-
-        for template_cls in [
-            GenericoTemplate,
-            PeticaoInicialTemplate,
-            ContratoTemplate,
-            SentencaTemplate,
-            LeiTemplate
-        ]:
-            instance = template_cls()
-            cls._registry[instance.name.lower()] = instance
+        """Não registra templates padrão - apenas aceita templates dinâmicos via request"""
+        pass

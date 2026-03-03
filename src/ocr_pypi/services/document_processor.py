@@ -230,16 +230,9 @@ class DocumentProcessor:
         chunk_options: Dict[str, Any],
     ) -> Generator[Dict, None, None]:
         """Dispatch chunking to the configured strategy."""
-        # Respect enable_chunking flag (default: True)
-        if not chunk_options.get("enable_chunking", True):
-            yield {"type": "progress", "stage": "chunking_skipped"}
-            yield {"type": "complete", "total_chunks": 0}
-            return
-
-        strategy = (
-            chunk_options.get("chunk_strategy")
-            or settings.DEFAULT_CHUNK_STRATEGY
-        )
+        # Chunking está SEMPRE habilitado
+        # Sempre usa estratégia LLM
+        strategy = "llm"
         yield from ChunkingStrategy.chunk(pages_data, strategy, chunk_options)
 
     def _chunk_with_llm(
