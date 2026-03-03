@@ -14,6 +14,37 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Enum conversion maps
+# ---------------------------------------------------------------------------
+
+PROTO_TO_PROVIDER = {
+    ocr_pb2.LLM_PROVIDER_OPENAI: "openai",
+    ocr_pb2.LLM_PROVIDER_ANTHROPIC: "anthropic",
+}
+
+PROVIDER_TO_PROTO = {v: k for k, v in PROTO_TO_PROVIDER.items()}
+
+PROTO_TO_LANGUAGE = {
+    ocr_pb2.OCR_LANGUAGE_PORTUGUESE: "por",
+    ocr_pb2.OCR_LANGUAGE_ENGLISH: "eng",
+    ocr_pb2.OCR_LANGUAGE_SPANISH: "spa",
+    ocr_pb2.OCR_LANGUAGE_FRENCH: "fra",
+    ocr_pb2.OCR_LANGUAGE_GERMAN: "deu",
+    ocr_pb2.OCR_LANGUAGE_ITALIAN: "ita",
+}
+
+LANGUAGE_TO_PROTO = {v: k for k, v in PROTO_TO_LANGUAGE.items()}
+
+PROTO_TO_CHUNKING = {
+    ocr_pb2.CHUNKING_METHOD_LLM: "llm",
+    ocr_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
+    ocr_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
+    ocr_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
+}
+
+CHUNKING_TO_PROTO = {v: k for k, v in PROTO_TO_CHUNKING.items()}
+
 
 def _proto_section_to_dict(section_proto) -> Dict[str, Any]:
     """Converts a TemplateSection proto message to a dict compatible with DynamicTemplate."""
@@ -31,7 +62,8 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
     def ProcessDocument(self, request, context):
         """Processa documento e retorna chunks via streaming"""
 
-        processor = DocumentProcessor(language=request.language or "por")
+        language = PROTO_TO_LANGUAGE.get(request.language, "por")
+        processor = DocumentProcessor(language=language)
 
         # Resolve template from oneof template_option
         template_instance = None
@@ -72,7 +104,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             "template_instance": template_instance,
 
             # LLM Provider (dinâmico por request)
-            "llm_provider": llm_config.provider or None,
+            "llm_provider": PROTO_TO_PROVIDER.get(llm_config.provider) if llm_config.provider != ocr_pb2.LLM_PROVIDER_UNSPECIFIED else None,
             "llm_model": llm_config.model or None,
             "llm_api_key": llm_api_key,
             "llm_temperature": llm_config.temperature if llm_config.temperature > 0 else None,
@@ -104,7 +136,10 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     page_numbers=chunk.page_numbers,
                     text=chunk.content,
                     chunk_metadata=json.dumps(chunk.metadata, ensure_ascii=False),
-                    chunking_method=chunk.metadata.get("chunking_method", chunking_method),
+                    chunking_method=CHUNKING_TO_PROTO.get(
+                        chunk.metadata.get("chunking_method", "llm"),
+                        ocr_pb2.CHUNKING_METHOD_LLM,
+                    ),
                     template_used=template_used,
                 )
 
@@ -120,7 +155,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
-                    chunking_method=chunking_method,
+                    chunking_method=CHUNKING_TO_PROTO.get(chunking_method, ocr_pb2.CHUNKING_METHOD_LLM),
                     template_used=template_used,
                 )
 
