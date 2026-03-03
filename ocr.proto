@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package ocr;
+
+import "Util/commons.proto";
+import "Util/types.proto";
+
+message TemplateSection {
+  string name = 1;
+  string description = 2;
+  bool required = 3;
+  repeated TemplateSection subsections = 4;
+}
+
+message DocumentTemplate {
+  string name = 1;
+  string description = 2;
+  repeated TemplateSection sections = 3;
+}
+
+message LLMConfig {
+  LLMProvider provider = 1;
+  string model = 2;
+  string api_key = 3;
+  float temperature = 4;
+  int32 max_tokens = 5;
+}
+
+message ProcessDocumentRequest {
+  string document_guid = 1;
+  string bucket = 2;
+  string file_key = 3;
+  OCRLanguage language = 4;
+  DocumentTemplate template = 5;
+  LLMConfig llm_config = 6;
+}
+
+message ProcessDocumentResponse {
+  OCRStatus status = 1;
+  OCRStage stage = 2;
+  int32 progress = 3;
+  int32 chunk_index = 4;
+  repeated int32 page_numbers = 5;
+  string text = 6;
+  string chunk_metadata = 7;
+  int32 total_chunks = 8;
+  ChunkingMethod chunking_method = 9;
+  string template_used = 10;
+  string error_message = 11;
+}
+
+message ListProvidersRequest {}
+
+message ListProvidersResponse {
+  repeated string providers = 1;
+}
+
+message ValidateDocumentRequest {
+  string bucket = 1;
+  string file_key = 2;
+}
+
+message ValidateDocumentResponse {
+  bool exists = 1;
+  bool supported = 2;
+  string message = 3;
+}
+
+message ValidateTemplateRequest {
+  DocumentTemplate template = 1;
+}
+
+message ValidateTemplateResponse {
+  bool is_valid = 1;
+  string validation_message = 2;
+  repeated string missing_fields = 3;
+  repeated string invalid_fields = 4;
+}
+
+enum LLMProvider {
+  LLM_PROVIDER_UNSPECIFIED = 0;
+  LLM_PROVIDER_OPENAI = 1;
+  LLM_PROVIDER_ANTHROPIC = 2;
+}
+
+enum OCRLanguage {
+  OCR_LANGUAGE_UNSPECIFIED = 0;
+  OCR_LANGUAGE_PORTUGUESE = 1;  // "por"
+  OCR_LANGUAGE_ENGLISH = 2;     // "eng"
+  OCR_LANGUAGE_SPANISH = 3;     // "spa"
+  OCR_LANGUAGE_FRENCH = 4;      // "fra"
+  OCR_LANGUAGE_GERMAN = 5;      // "deu"
+  OCR_LANGUAGE_ITALIAN = 6;     // "ita"
+}
+
+enum ChunkingMethod {
+  CHUNKING_METHOD_UNSPECIFIED = 0;
+  CHUNKING_METHOD_LLM = 1;
+}
+
+enum OCRStatus {
+  IDLE_STATUS = 0;
+  PROCESSING = 1;
+  COMPLETED = 2;
+  FAILED = 3;
+}
+
+enum OCRStage {
+  IDLE = 0;
+  VALIDATING = 1;
+  DOWNLOADING = 2;
+  EXTRACTING = 3;
+  CHUNKING = 4;
+  FINISHED = 5;
+}
+
+enum HealthStatus {
+  HEALTH_NOT_SERVING = 0;
+  HEALTH_SERVING = 1;
+}
+
+message HealthCheckResponse {
+  HealthStatus status = 1;
+  string message = 2;
+}
+
+message HealthCheckRequest {}
+
+service OCRService {
+  rpc ProcessDocument(ProcessDocumentRequest) returns (stream ProcessDocumentResponse);
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
+  rpc ValidateDocument(ValidateDocumentRequest) returns (ValidateDocumentResponse);
+  rpc ValidateTemplate(ValidateTemplateRequest) returns (ValidateTemplateResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
