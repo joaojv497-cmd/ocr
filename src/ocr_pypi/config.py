@@ -22,4 +22,16 @@ class Settings:
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
     DEFAULT_TEMPLATE: str = os.getenv("DEFAULT_TEMPLATE", "generico")
 
+    # Chunking strategy defaults
+    DEFAULT_CHUNK_STRATEGY: str = os.getenv("DEFAULT_CHUNK_STRATEGY", "llm")
+    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "4000"))
+    MIN_CHUNK_SIZE: int = int(os.getenv("MIN_CHUNK_SIZE", "200"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "0"))
+
+    # Semantic chunking (embeddings)
+    EMBEDDING_MODEL: str = os.getenv(
+        "EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
+    )
+    SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
+
 settings = Settings()

@@ -1,5 +1,6 @@
 """Document processor orchestrating the full OCR pipeline."""
 import os
+import uuid
 import time
 import logging
 from typing import Generator, List, Dict, Any, Optional
@@ -11,6 +12,7 @@ import io
 
 from commons_pypi.storage import get_temp_file
 from ocr_pypi.chunking.llm_chunker import LLMChunker
+from ocr_pypi.chunking.chunking_strategy import ChunkingStrategy
 from ocr_pypi.storage import get_storage
 from ocr_pypi.config import settings
 from ocr_pypi.detection.pdf_type_detector import PDFTypeDetector
@@ -62,12 +64,20 @@ class DocumentProcessor:
         Process a document and yield progress events, chunks, and a final result.
 
         chunk_options may contain (all optional, fallback to env/settings):
+            - chunk_strategy: 'llm' (default) | 'semantic' | 'paragraph' | 'hybrid'
+            - enable_chunking: bool (default True); if False, skip chunking entirely
             - template: template name
+            - template_instance: pre-built DocumentTemplate instance (overrides template)
             - llm_provider: provider name
             - llm_model: model name
             - llm_api_key: API key
             - llm_temperature: temperature
             - llm_max_tokens: max tokens
+            - chunk_size: max chunk chars (semantic/paragraph strategies)
+            - chunk_overlap: overlap chars (paragraph strategy)
+            - min_chunk_size: minimum chunk chars (semantic/paragraph)
+            - embedding_model: sentence-transformer model name (semantic strategy)
+            - similarity_threshold: cosine threshold (semantic strategy)
 
         Yields:
             Dict with 'type' in ('progress', 'chunk', 'complete', 'error')
@@ -120,8 +130,8 @@ class DocumentProcessor:
             pages_data = self._apply_section_classification(pages_data)
             yield {"type": "progress", "stage": "section_classification_complete"}
 
-            # 7. LLM Chunking
-            yield from self._chunk_with_llm(pages_data, chunk_options)
+            # 7. Chunking (strategy-aware)
+            yield from self._chunk_with_strategy(pages_data, chunk_options)
 
         except Exception as e:
             logger.error(f"Error processing document: {e}", exc_info=True)
@@ -210,6 +220,24 @@ class DocumentProcessor:
                 blocks = self._section_classifier.classify_blocks(blocks)
             result.append({**page, "blocks": blocks})
         return result
+
+    def _chunk_with_strategy(
+        self,
+        pages_data: List[Dict[str, Any]],
+        chunk_options: Dict[str, Any],
+    ) -> Generator[Dict, None, None]:
+        """Dispatch chunking to the configured strategy."""
+        # Respect enable_chunking flag (default: True)
+        if not chunk_options.get("enable_chunking", True):
+            yield {"type": "progress", "stage": "chunking_skipped"}
+            yield {"type": "complete", "total_chunks": 0}
+            return
+
+        strategy = (
+            chunk_options.get("chunk_strategy")
+            or settings.DEFAULT_CHUNK_STRATEGY
+        )
+        yield from ChunkingStrategy.chunk(pages_data, strategy, chunk_options)
 
     def _chunk_with_llm(
         self,
