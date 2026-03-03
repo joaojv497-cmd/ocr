@@ -29,9 +29,16 @@ class SemanticChunker:
     sentence-transformers is unavailable.
     """
 
-    def __init__(self, model_name: Optional[str] = None):
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        max_chunk_chars: int = MAX_CHUNK_CHARS,
+        min_chunk_chars: int = MIN_CHUNK_CHARS,
+    ):
         self._model: Optional[Any] = None
         self._model_name = model_name or DEFAULT_MODEL
+        self._max_chunk_chars = max_chunk_chars
+        self._min_chunk_chars = min_chunk_chars
 
     def _load_model(self) -> bool:
         """Lazy-load the embedding model."""
@@ -82,7 +89,7 @@ class SemanticChunker:
             page_num = page.get("page_number", 1)
             for para in text.split("\n\n"):
                 para = para.strip()
-                if len(para) >= MIN_CHUNK_CHARS // 4:
+                if len(para) >= self._min_chunk_chars // 4:
                     paragraphs.append({"text": para, "page_number": page_num})
         return paragraphs
 
@@ -104,7 +111,7 @@ class SemanticChunker:
             sim = self._cosine_similarity(embeddings[i - 1], embeddings[i])
             total_chars = sum(len(t) for t in current_texts) + len(paragraphs[i]["text"])
 
-            if sim >= threshold and total_chars <= MAX_CHUNK_CHARS:
+            if sim >= threshold and total_chars <= self._max_chunk_chars:
                 current_texts.append(paragraphs[i]["text"])
                 current_pages.append(paragraphs[i]["page_number"])
             else:
@@ -130,7 +137,7 @@ class SemanticChunker:
             text = para["text"]
             page_num = para["page_number"]
 
-            if current_chars + len(text) > MAX_CHUNK_CHARS and current_texts:
+            if current_chars + len(text) > self._max_chunk_chars and current_texts:
                 chunks.append(self._make_chunk(current_texts, current_pages, chunk_idx))
                 chunk_idx += 1
                 current_texts = []
