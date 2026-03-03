@@ -66,6 +66,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             elif result["type"] == "complete":
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.COMPLETED,
+                    stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
                 )
 
@@ -107,11 +108,17 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
     def HealthCheck(self, request, context):
         """Health check do serviço"""
         return ocr_pb2.HealthCheckResponse(
-            status=ocr_pb2.HEALTH_SERVING,
+            status=types_pb2.HealthStatus.HEALTH_SERVING,
             message="OCR Service running",
         )
 
-    def _map_stage(self, stage: str):
-        """Mapeia stage string para enum do proto (ajuste conforme seu types.proto)"""
-        # Implementar mapeamento conforme seu types_pb2.OCRStage
-        return 0
+    def _map_stage(self, stage: str) -> int:
+        """Mapeia stage string para enum do proto"""
+        stage_map = {
+            "validating": types_pb2.OCRStage.VALIDATING,
+            "downloading": types_pb2.OCRStage.DOWNLOADING,
+            "extracting": types_pb2.OCRStage.EXTRACTING,
+            "chunking": types_pb2.OCRStage.CHUNKING,
+            "finished": types_pb2.OCRStage.FINISHED,
+        }
+        return stage_map.get(stage.lower(), types_pb2.OCRStage.IDLE)
