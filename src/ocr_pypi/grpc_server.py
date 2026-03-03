@@ -1,13 +1,15 @@
 import json
 import os
 from typing import Any, Dict
+
+from commons_pypi.llm_providers.factory import LLMProviderFactory
+
 from ocr_pypi.proto import ocr_pb2_grpc, ocr_pb2
 import ocr_pypi.proto.types_pb2 as types_pb2
 
 from ocr_pypi.services.document_processor import DocumentProcessor
 from ocr_pypi.storage import get_storage
 from ocr_pypi.chunking.templates.registry import TemplateRegistry
-from ocr_pypi.chunking.llm_providers.factory import LLMProviderFactory
 from ocr_pypi.chunking.templates.dynamic_template import DynamicTemplate
 
 import logging

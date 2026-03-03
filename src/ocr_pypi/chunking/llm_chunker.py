@@ -2,8 +2,9 @@ import json
 import logging
 from typing import List, Dict, Any
 
-from ocr_pypi.chunking.llm_providers.base_provider import LLMProvider
-from ocr_pypi.chunking.llm_providers.factory import LLMProviderFactory
+from commons_pypi.llm_providers.base_provider import LLMProvider
+from commons_pypi.llm_providers.factory import LLMProviderFactory
+
 from ocr_pypi.chunking.templates.base_template import DocumentTemplate
 from ocr_pypi.chunking.templates.registry import TemplateRegistry
 from ocr_pypi.models.document import Chunk, StructuredDocument, StructuredSection
