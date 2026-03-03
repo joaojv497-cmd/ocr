@@ -1,0 +1,78 @@
+name: Build and Publish gRPC Microservice Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-publish:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set image version
+        run: echo "IMAGE_VERSION=0.0.${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry self add poetry-plugin-export
+
+      - name: Configure Poetry to use Nexus
+        run: |
+          poetry config http-basic.nexus \
+            ${{ secrets.NEXUS_USERNAME }} \
+            ${{ secrets.NEXUS_PASSWORD }}
+
+      - name: Run poetry lock
+        run: poetry lock
+
+      - name: Export requirements.txt
+        run: |
+          poetry export -f requirements.txt \
+            --without-hashes \
+            --only main \
+            --output requirements.txt
+
+      - name: Criar pip.conf para Nexus
+        run: |
+          mkdir -p .pip
+          cat <<EOF > .pip/pip.conf
+          [global]
+          index-url = https://${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }}@${{ secrets.NEXUS_URL }}/repository/pypi-all/simple
+          extra-index-url = https://pypi.org/simple
+          EOF
+
+      - name: Login to Nexus Docker Registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | docker login \
+            ${{ secrets.NEXUS_URL }} \
+            -u "${{ secrets.NEXUS_USERNAME }}" \
+            --password-stdin
+
+      - name: Build Docker image (no cache for Watchtower)
+        run: |
+          IMAGE_NAME=${{ secrets.NEXUS_URL }}/${{ secrets.NEXUS_DOCKER_REPOSITORY }}/ms-ocr
+          # Build SEM CACHE para garantir digest novo
+          docker build --no-cache -t $IMAGE_NAME:${{ env.IMAGE_VERSION }} -t $IMAGE_NAME:latest .
+
+      - name: Show Docker image size before push
+        run: |
+          IMAGE_NAME=${{ secrets.NEXUS_URL }}/${{ secrets.NEXUS_DOCKER_REPOSITORY }}/ms-ocr
+          echo "Tamanhos das tags:"
+          docker images $IMAGE_NAME --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+      - name: Push image to Nexus
+        run: |
+          IMAGE_NAME=${{ secrets.NEXUS_URL }}/${{ secrets.NEXUS_DOCKER_REPOSITORY }}/ms-ocr
+          docker push $IMAGE_NAME:${{ env.IMAGE_VERSION }}
+          docker push $IMAGE_NAME:latest

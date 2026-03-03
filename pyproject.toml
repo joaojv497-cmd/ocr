@@ -1,0 +1,51 @@
+[project]
+name = "ocr-pypi"
+version = "0.2.0"
+description = "OCR service with intelligent document chunking"
+authors = [
+    {name = "João Victor Tavares", email = "joaojv497@hotmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "devminds-commons-proto>=0.0.35",
+    "devminds-commons==0.0.23",
+    "pytesseract>=0.3.13,<0.4.0",
+    "grpcio>=1.78.0,<2.0.0",
+    "grpcio-reflection>=1.78.0,<2.0.0",
+    "pymupdf>=1.27.1,<2.0.0",
+    "python-dotenv>=1.2.1,<2.0.0",
+    "pillow>=10.0.0,<11.0.0",
+    "sentence-transformers>=2.6.0",
+    "numpy==1.26.4",
+    "torch==2.4.1",
+    "torchvision==0.19.1",
+    "openai>=1.50.0,<2.0.0",
+    "google-genai>=1.0.0",
+    "anthropic>=0.40.0,<1.0.0",
+]
+
+[tool.poetry]
+packages = [{include = "ocr_pypi", from = "src"}]
+
+[[tool.poetry.source]]
+name = "nexus"
+url = "https://nexus.devminds.site/repository/pypi-hosted/simple/"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "pypi"
+priority = "supplemental"
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
+[tool.poetry.dependencies]
+torch = {source = "pytorch-cpu"}
+torchvision = {source = "pytorch-cpu"}
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,58 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ===== Virtual Environments =====
+venv/
+.venv/
+env/
+ENV/
+
+# ===== Packaging =====
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ===== PyInstaller =====
+*.spec
+
+# ===== Tests =====
+.coverage
+.pytest_cache/
+htmlcov/
+
+# ===== Logs =====
+*.log
+
+# ===== Jupyter =====
+.ipynb_checkpoints
+
+# ===== IDEs =====
+.vscode/
+.idea/
+*.swp
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== dotenv =====
+.env
+
+# ===== mypy =====
+.mypy_cache/
+
+# ===== pip =====
+pip-wheel-metadata/
+
+# ===== Poetry =====
+poetry.lock
+
+# ===== Ruff / Lint =====
+.ruff_cache/
+
+# ===== PyCharm =====
+*.iml
