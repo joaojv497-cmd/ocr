@@ -153,7 +153,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     chunk_metadata=json.dumps(chunk.metadata, ensure_ascii=False),
                     chunking_method=CHUNKING_TO_PROTO.get(
                         chunk.metadata.get("chunking_method", "llm"),
-                        ocr_pb2.CHUNKING_METHOD_LLM,
+                        types_pb2.CHUNKING_METHOD_LLM,
                     ),
                     template_used=template_used,
                 )
@@ -170,7 +170,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
-                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, ocr_pb2.CHUNKING_METHOD_LLM),
+                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, types_pb2.CHUNKING_METHOD_LLM),
                     template_used=template_used,
                 )
 
@@ -263,10 +263,22 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
     def _map_stage(self, stage: str) -> int:
         """Mapeia stage string para enum do proto"""
         stage_map = {
+            # Stages existentes
             "validating": types_pb2.OCRStage.VALIDATING,
             "downloading": types_pb2.OCRStage.DOWNLOADING,
             "extracting": types_pb2.OCRStage.EXTRACTING,
             "chunking": types_pb2.OCRStage.CHUNKING,
             "finished": types_pb2.OCRStage.FINISHED,
+
+            "download_complete": types_pb2.OCRStage.DOWNLOADING,
+            "type_detection_complete": types_pb2.OCRStage.EXTRACTING,
+            "text_extraction_complete": types_pb2.OCRStage.EXTRACTING,
+            "layout_analysis_complete": types_pb2.OCRStage.EXTRACTING,
+            "noise_removal_complete": types_pb2.OCRStage.EXTRACTING,
+            "section_classification_complete": types_pb2.OCRStage.EXTRACTING,
+            "llm_chunking_starting": types_pb2.OCRStage.CHUNKING,
+            "semantic_chunking_starting": types_pb2.OCRStage.CHUNKING,
+            "paragraph_chunking_starting": types_pb2.OCRStage.CHUNKING,
+            "chunking_complete": types_pb2.OCRStage.CHUNKING,
         }
         return stage_map.get(stage.lower(), types_pb2.OCRStage.IDLE)
