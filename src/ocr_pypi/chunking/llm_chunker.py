@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from commons_pypi.llm_providers.base_provider import LLMProvider
 from commons_pypi.llm_providers.factory import LLMProviderFactory
@@ -12,6 +12,11 @@ from ocr_pypi.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Approximate characters per token (conservative estimate)
+CHARS_PER_TOKEN = 4
+# Default maximum input characters before splitting the document
+DEFAULT_MAX_INPUT_CHARS = 80_000
+
 
 class LLMChunker:
     """
@@ -20,6 +25,9 @@ class LLMChunker:
     Substitui LayoutLMAnalyzer + SemanticChunker.
     Recebe texto já extraído pelo OCR e usa a LLM para separar
     em chunks estruturados conforme o template fornecido.
+
+    Para documentos grandes, divide automaticamente em seções menores,
+    processa cada seção separadamente e combina os resultados.
     """
 
     def __init__(
@@ -30,12 +38,17 @@ class LLMChunker:
         model: str = None,
         temperature: float = None,
         max_tokens: int = None,
+        max_input_chars: int = DEFAULT_MAX_INPUT_CHARS,
     ):
         """
         Inicializa o LLMChunker.
 
         Pode receber um provider já instanciado OU os parâmetros para
         criar um via factory. Se nada for informado, usa as configs do settings.
+
+        Args:
+            max_input_chars: Limite máximo de caracteres de entrada por chamada LLM.
+                             Documentos maiores são divididos automaticamente.
         """
         if provider:
             self.provider = provider
@@ -48,6 +61,7 @@ class LLMChunker:
                 max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
             )
 
+        self.max_input_chars = max_input_chars
         logger.info(f"LLMChunker inicializado com {self.provider}")
 
     def chunk(
@@ -84,10 +98,14 @@ class LLMChunker:
             f"com template '{template.name}' via {self.provider}"
         )
 
-        # 2. Constrói prompt com o template
+        # 2. Decide se processa direto ou divide em seções menores
+        if len(full_text) > self.max_input_chars:
+            return self._chunk_large_document(pages, template)
+
+        # 3. Constrói prompt com o template
         prompt = template.build_prompt(full_text)
 
-        # 3. Envia para LLM
+        # 4. Envia para LLM
         try:
             llm_response = self.provider.generate(prompt)
             structured_data = self._parse_llm_response(llm_response)
@@ -98,7 +116,7 @@ class LLMChunker:
             logger.error(f"Erro na comunicação com LLM: {e}")
             return self._fallback_chunks(pages)
 
-        # 4. Converte resposta estruturada em Chunks
+        # 5. Converte resposta estruturada em Chunks
         chunks = self._build_chunks(structured_data, pages)
         logger.info(f"Criados {len(chunks)} chunks estruturados")
 
@@ -122,6 +140,31 @@ class LLMChunker:
         if not full_text.strip():
             return StructuredDocument(document_type=template.name)
 
+        if len(full_text) > self.max_input_chars:
+            chunks = self._chunk_large_document(pages, template)
+            sections = [
+                StructuredSection(
+                    section_name=c.metadata.get("section_name", ""),
+                    title=c.metadata.get("section_title", ""),
+                    content=c.content,
+                    page_numbers=c.page_numbers,
+                    subsections=[
+                        StructuredSection(
+                            section_name=sub.get("section_name", ""),
+                            title=sub.get("title", ""),
+                            content=sub.get("content", ""),
+                        )
+                        for sub in c.metadata.get("subsections", [])
+                    ],
+                    metadata=c.metadata,
+                )
+                for c in chunks
+            ]
+            return StructuredDocument(
+                document_type=template.name,
+                sections=sections,
+            )
+
         prompt = template.build_prompt(full_text)
 
         try:
@@ -144,6 +187,93 @@ class LLMChunker:
             if text:
                 parts.append(f"[PÁGINA {page_num}]\n{text}")
         return "\n\n".join(parts)
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Estima o número de tokens com base no comprimento do texto."""
+        return len(text) // CHARS_PER_TOKEN
+
+    def _split_pages_into_sections(
+        self, pages: List[Dict[str, Any]]
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Divide a lista de páginas em seções menores respeitando o limite de caracteres.
+
+        Mantém contexto entre seções ao incluir a última página da seção anterior
+        no início da próxima seção (overlap de 1 página).
+        """
+        sections: List[List[Dict[str, Any]]] = []
+        current_section: List[Dict[str, Any]] = []
+        current_chars = 0
+
+        for page in pages:
+            page_text = page.get("text", "")
+            page_chars = len(page_text)
+
+            if current_chars + page_chars > self.max_input_chars and current_section:
+                sections.append(current_section)
+                # Overlap: include last page of previous section for context
+                current_section = [current_section[-1], page]
+                current_chars = len(current_section[-2].get("text", "")) + page_chars
+            else:
+                current_section.append(page)
+                current_chars += page_chars
+
+        if current_section:
+            sections.append(current_section)
+
+        return sections
+
+    def _chunk_large_document(
+        self,
+        pages: List[Dict[str, Any]],
+        template: DocumentTemplate,
+    ) -> List[Chunk]:
+        """
+        Processa documentos grandes dividindo-os em seções menores.
+
+        Divide as páginas em grupos que respeitam o limite de caracteres,
+        processa cada grupo separadamente e combina os resultados preservando
+        a estrutura hierárquica e reindexando os chunks.
+        """
+        page_sections = self._split_pages_into_sections(pages)
+        logger.info(
+            f"Documento grande dividido em {len(page_sections)} seções para processamento"
+        )
+
+        all_chunks: List[Chunk] = []
+        chunk_offset = 0
+
+        for section_idx, section_pages in enumerate(page_sections):
+            section_text = self._combine_pages(section_pages)
+            logger.info(
+                f"Processando seção {section_idx + 1}/{len(page_sections)} "
+                f"({len(section_pages)} páginas, {len(section_text)} chars)"
+            )
+
+            prompt = template.build_prompt(section_text)
+
+            try:
+                llm_response = self.provider.generate(prompt)
+                structured_data = self._parse_llm_response(llm_response)
+                section_chunks = self._build_chunks(structured_data, section_pages)
+            except json.JSONDecodeError as e:
+                logger.error(f"Erro ao parsear JSON na seção {section_idx + 1}: {e}")
+                section_chunks = self._fallback_chunks(section_pages)
+            except Exception as e:
+                logger.error(f"Erro na LLM na seção {section_idx + 1}: {e}")
+                section_chunks = self._fallback_chunks(section_pages)
+
+            # Reindex chunks to maintain global ordering
+            for chunk in section_chunks:
+                chunk.chunk_index = chunk_offset + chunk.chunk_index
+                chunk.metadata["section_index"] = section_idx
+                chunk.metadata["total_sections"] = len(page_sections)
+            chunk_offset += len(section_chunks)
+
+            all_chunks.extend(section_chunks)
+
+        logger.info(f"Criados {len(all_chunks)} chunks totais de {len(page_sections)} seções")
+        return all_chunks
 
     def _parse_llm_response(self, response: str) -> Dict:
         """Parse da resposta JSON da LLM, limpando marcadores de código"""

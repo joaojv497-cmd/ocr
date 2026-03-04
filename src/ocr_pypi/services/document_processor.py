@@ -23,6 +23,8 @@ from ocr_pypi.layout.reading_order_reconstructor import ReadingOrderReconstructo
 from ocr_pypi.cleaning.noise_remover import NoiseRemover
 from ocr_pypi.semantic.section_classifier import SectionClassifier
 from ocr_pypi.output.json_formatter import JSONFormatter
+from ocr_pypi.vision.image_detector import ImageDetector
+from ocr_pypi.vision.image_descriptor import ImageDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,8 @@ class DocumentProcessor:
         self._noise_remover = NoiseRemover()
         self._section_classifier = SectionClassifier()
         self._formatter = JSONFormatter()
+        self._image_detector = ImageDetector()
+        self._image_descriptor: Optional[ImageDescriptor] = None
 
     def process(
         self,
@@ -79,6 +83,7 @@ class DocumentProcessor:
             - preserve_structure: preserve document hierarchy (advanced)
             - max_chunks_per_section: max chunks per section (advanced)
             - metadata_fields: extra metadata fields to include (dict, from chunk_metadata_fields JSON)
+            - detect_images: whether to detect and describe images (default: True)
 
         Yields:
             Dict with 'type' in ('progress', 'chunk', 'complete', 'error')
@@ -131,7 +136,13 @@ class DocumentProcessor:
             pages_data = self._apply_section_classification(pages_data)
             yield {"type": "progress", "stage": "section_classification_complete"}
 
-            # 7. Chunking (strategy-aware)
+            # 7. Image detection and description (optional)
+            detect_images = chunk_options.get("detect_images", True)
+            if detect_images:
+                pages_data = self._apply_image_detection(temp_path, pages_data, chunk_options)
+                yield {"type": "progress", "stage": "image_detection_complete"}
+
+            # 8. Chunking (strategy-aware)
             yield from self._chunk_with_strategy(pages_data, chunk_options)
 
         except Exception as e:
@@ -230,6 +241,93 @@ class DocumentProcessor:
         """Dispatch chunking to the configured strategy."""
         strategy = chunk_options.get("chunk_strategy", "llm")
         yield from ChunkingStrategy.chunk(pages_data, strategy, chunk_options)
+
+    def _get_image_descriptor(self, chunk_options: Dict[str, Any]) -> ImageDescriptor:
+        """Lazily creates or returns the shared ImageDescriptor instance."""
+        if self._image_descriptor is None:
+            self._image_descriptor = ImageDescriptor(
+                provider_name=chunk_options.get("llm_provider"),
+                api_key=chunk_options.get("llm_api_key"),
+                model=chunk_options.get("llm_model"),
+                temperature=chunk_options.get("llm_temperature"),
+                max_tokens=chunk_options.get("llm_max_tokens"),
+            )
+        return self._image_descriptor
+
+    def _apply_image_detection(
+        self,
+        pdf_path: str,
+        pages_data: List[Dict],
+        chunk_options: Dict[str, Any],
+    ) -> List[Dict]:
+        """
+        Detect images in the PDF and enrich each page with LLM-generated descriptions.
+
+        Descriptions are stored in 'image_descriptions' on each page and also
+        appended to the page text so they are included in the RAG context.
+        """
+        try:
+            images = self._image_detector.detect_images(pdf_path)
+        except Exception as e:
+            logger.warning(f"Falha na detecção de imagens: {e}")
+            return pages_data
+
+        if not images:
+            return pages_data
+
+        logger.info(f"Detectadas {len(images)} imagens; gerando descrições...")
+
+        try:
+            descriptor = self._get_image_descriptor(chunk_options)
+            image_descriptions = descriptor.describe_images(images)
+        except Exception as e:
+            logger.warning(f"Falha na descrição de imagens: {e}")
+            return pages_data
+
+        # Group descriptions by page number
+        descriptions_by_page: Dict[int, list] = {}
+        for desc in image_descriptions:
+            descriptions_by_page.setdefault(desc.page_number, []).append(desc)
+
+        # Enrich pages_data
+        result = []
+        for page in pages_data:
+            page_num = page["page_number"]
+            page_descs = descriptions_by_page.get(page_num, [])
+
+            if not page_descs:
+                result.append(page)
+                continue
+
+            # Build image description text blocks to append to page text
+            desc_blocks = []
+            for desc in page_descs:
+                block = (
+                    f"[IMAGEM {desc.image_info.image_index + 1} - "
+                    f"Página {page_num}]: {desc.description}"
+                )
+                desc_blocks.append(block)
+
+            enriched_text = page.get("text", "")
+            if desc_blocks:
+                enriched_text = enriched_text + "\n\n" + "\n".join(desc_blocks)
+
+            result.append({
+                **page,
+                "text": enriched_text,
+                "image_descriptions": [
+                    {
+                        "image_index": d.image_info.image_index,
+                        "description": d.description,
+                        "page_number": d.page_number,
+                        "width": d.image_info.width,
+                        "height": d.image_info.height,
+                    }
+                    for d in page_descs
+                ],
+            })
+
+        return result
 
     def _extract_text(self, pdf_path: str) -> Generator[Dict, None, None]:
         """
