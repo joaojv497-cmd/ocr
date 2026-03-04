@@ -74,9 +74,32 @@ class StructuredDocument:
 
 
 @dataclass
+class ImageInfo:
+    """Imagem detectada em uma página do PDF"""
+    page_number: int
+    image_index: int
+    bbox: Optional[BoundingBox]
+    width: int
+    height: int
+    image_data: bytes = field(default_factory=lambda: b"", repr=False)
+    colorspace: str = "rgb"
+    format: str = "png"
+
+
+@dataclass
+class ImageDescription:
+    """Descrição gerada por LLM para uma imagem"""
+    image_info: ImageInfo
+    description: str
+    page_number: int
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class Chunk:
     content: str
     page_numbers: List[int]
     chunk_index: int
     metadata: Dict[str, Any] = field(default_factory=dict)
     detected_areas: List[DocumentArea] = field(default_factory=list)
+    image_descriptions: List[ImageDescription] = field(default_factory=list)
