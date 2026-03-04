@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 CHARS_PER_TOKEN = 4
 # Default maximum input characters before splitting the document
 DEFAULT_MAX_INPUT_CHARS = 80_000
+# Default maximum characters per chunk sent to the LLM in incremental mode
+DEFAULT_MAX_CHUNK_CHARS = 4_000
+# Default maximum tokens per chunk (used together with MAX_CHUNK_CHARS)
+DEFAULT_MAX_CHUNK_TOKENS = 1_000
 
 
 class LLMChunker:
@@ -39,6 +43,8 @@ class LLMChunker:
         temperature: float = None,
         max_tokens: int = None,
         max_input_chars: int = DEFAULT_MAX_INPUT_CHARS,
+        max_chunk_chars: int = DEFAULT_MAX_CHUNK_CHARS,
+        max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
     ):
         """
         Inicializa o LLMChunker.
@@ -47,8 +53,16 @@ class LLMChunker:
         criar um via factory. Se nada for informado, usa as configs do settings.
 
         Args:
-            max_input_chars: Limite máximo de caracteres de entrada por chamada LLM.
-                             Documentos maiores são divididos automaticamente.
+            max_input_chars: Limite absoluto de caracteres do documento antes de
+                             acionar o processamento incremental. Funciona como
+                             barreira de segurança máxima.
+            max_chunk_chars: Máximo de caracteres por grupo de páginas enviado à LLM
+                             no modo incremental. Documentos maiores que este valor são
+                             automaticamente divididos para que cada chamada à LLM receba
+                             no máximo ``max_chunk_chars`` caracteres, mantendo os chunks
+                             focados e otimizados para embedding.
+            max_chunk_tokens: Máximo de tokens por chunk (informativo; usado em conjunto
+                              com ``max_chunk_chars`` — o menor valor prevalece).
         """
         if provider:
             self.provider = provider
@@ -62,6 +76,13 @@ class LLMChunker:
             )
 
         self.max_input_chars = max_input_chars
+        self.max_chunk_chars = max_chunk_chars
+        self.max_chunk_tokens = max_chunk_tokens
+        # Effective per-section limit: honour both char and token constraints
+        self._effective_chunk_limit = min(
+            max_chunk_chars,
+            max_chunk_tokens * CHARS_PER_TOKEN,
+        )
         logger.info(f"LLMChunker inicializado com {self.provider}")
 
     def chunk(
@@ -98,8 +119,11 @@ class LLMChunker:
             f"com template '{template.name}' via {self.provider}"
         )
 
-        # 2. Decide se processa direto ou divide em seções menores
-        if len(full_text) > self.max_input_chars:
+        # 2. Decide se processa direto ou de forma incremental.
+        # Usa o menor entre max_input_chars e _effective_chunk_limit para respeitar
+        # tanto o tamanho por chunk quanto o limite absoluto máximo do documento.
+        split_threshold = min(self.max_input_chars, self._effective_chunk_limit)
+        if len(full_text) > split_threshold:
             return self._chunk_large_document(pages, template)
 
         # 3. Constrói prompt com o template
@@ -140,7 +164,8 @@ class LLMChunker:
         if not full_text.strip():
             return StructuredDocument(document_type=template.name)
 
-        if len(full_text) > self.max_input_chars:
+        split_threshold = min(self.max_input_chars, self._effective_chunk_limit)
+        if len(full_text) > split_threshold:
             chunks = self._chunk_large_document(pages, template)
             sections = [
                 StructuredSection(
@@ -198,6 +223,9 @@ class LLMChunker:
         """
         Divide a lista de páginas em seções menores respeitando o limite de caracteres.
 
+        Cada seção contém no máximo ``_effective_chunk_limit`` caracteres para que
+        cada chamada à LLM produza chunks focados e otimizados para embedding.
+
         Mantém contexto entre seções ao incluir a última página da seção anterior
         no início da próxima seção (overlap de 1 página).
         """
@@ -209,9 +237,9 @@ class LLMChunker:
             page_text = page.get("text", "")
             page_chars = len(page_text)
 
-            if current_chars + page_chars > self.max_input_chars and current_section:
+            if current_chars + page_chars > self._effective_chunk_limit and current_section:
                 sections.append(current_section)
-                # Overlap: include last page of previous section for context
+                # Overlap: inclui a última página da seção anterior para contexto
                 current_section = [current_section[-1], page]
                 current_chars = len(current_section[-2].get("text", "")) + page_chars
             else:
