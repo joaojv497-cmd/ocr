@@ -41,6 +41,7 @@ PROTO_TO_LANGUAGE = {
 LANGUAGE_TO_PROTO = {v: k for k, v in PROTO_TO_LANGUAGE.items()}
 
 PROTO_TO_CHUNKING = {
+    types_pb2.CHUNKING_METHOD_UNSPECIFIED: "unspecified",
     types_pb2.CHUNKING_METHOD_LLM: "llm",
     types_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
     types_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
@@ -74,7 +75,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
         # Resolve chunking method
         chunking_method_proto = request.chunking_method
-        chunk_strategy = PROTO_TO_CHUNKING.get(chunking_method_proto, "llm")
+        chunk_strategy = PROTO_TO_CHUNKING.get(chunking_method_proto, "unspecified")
 
         # Resolve template from request.template (regular field, not oneof)
         template_instance = None
@@ -152,8 +153,8 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     text=chunk.content,
                     chunk_metadata=json.dumps(chunk.metadata, ensure_ascii=False),
                     chunking_method=CHUNKING_TO_PROTO.get(
-                        chunk.metadata.get("chunking_method", "llm"),
-                        types_pb2.CHUNKING_METHOD_LLM,
+                        chunk.metadata.get("chunking_method", chunk_strategy),
+                        types_pb2.CHUNKING_METHOD_UNSPECIFIED,
                     ),
                     template_used=template_used,
                 )
@@ -170,7 +171,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
-                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, types_pb2.CHUNKING_METHOD_LLM),
+                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, types_pb2.CHUNKING_METHOD_UNSPECIFIED),
                     template_used=template_used,
                 )
 
