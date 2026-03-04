@@ -1,7 +1,7 @@
 """Geração de descrições de imagens usando LLM com suporte a visão."""
 import base64
 import logging
-from typing import List, Optional
+from typing import List, Optional, Generator
 
 from commons_pypi.llm_providers.base_provider import LLMProvider
 from commons_pypi.llm_providers.factory import LLMProviderFactory
@@ -64,12 +64,24 @@ class ImageDescriptor:
         Returns:
             Lista de ImageDescription com descrições geradas.
         """
-        descriptions: List[ImageDescription] = []
+        return list(self.describe_images_iter(images))
+
+    def describe_images_iter(
+        self, images: List[ImageInfo]
+    ) -> Generator[ImageDescription, None, None]:
+        """
+        Gera descrições para uma lista de imagens, uma por vez.
+
+        Args:
+            images: Lista de ImageInfo com dados das imagens.
+
+        Yields:
+            ImageDescription para cada imagem processada com sucesso.
+        """
         for image_info in images:
             description = self._describe_single(image_info)
             if description is not None:
-                descriptions.append(description)
-        return descriptions
+                yield description
 
     def _describe_single(self, image_info: ImageInfo) -> Optional[ImageDescription]:
         """Gera descrição para uma única imagem."""

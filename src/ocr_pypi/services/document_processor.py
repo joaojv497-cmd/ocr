@@ -86,7 +86,8 @@ class DocumentProcessor:
             - detect_images: whether to detect and describe images (default: True)
 
         Yields:
-            Dict with 'type' in ('progress', 'chunk', 'complete', 'error')
+            Dict with 'type' in ('progress', 'page_processed', 'image_described',
+            'chunk', 'complete', 'error')
         """
         temp_path = None
         chunk_options = chunk_options or {}
@@ -110,13 +111,25 @@ class DocumentProcessor:
                 "total_pages": type_result.total_pages,
             }
 
-            # 3. Extract text (digital or OCR path)
+            # 3. Extract text page by page, applying layout analysis per page
+            total_pages = type_result.total_pages
             if type_result.pdf_type == PDFType.DIGITAL:
-                pages_data = self._extractor.extract_with_layout(temp_path)
+                page_iter = self._extractor.extract_with_layout(temp_path)
             elif type_result.pdf_type == PDFType.SCANNED:
-                pages_data = list(self._ocr_extract(temp_path))
+                page_iter = self._ocr_extract(temp_path)
             else:  # HYBRID
-                pages_data = self._hybrid_extract(temp_path, type_result)
+                page_iter = iter(self._hybrid_extract(temp_path, type_result))
+
+            pages_data = []
+            for page in page_iter:
+                page = self._apply_layout_analysis_single(page)
+                pages_data.append(page)
+                yield {
+                    "type": "progress",
+                    "stage": "page_extracted",
+                    "page_number": page["page_number"],
+                    "total_pages": total_pages,
+                }
 
             yield {
                 "type": "progress",
@@ -124,22 +137,37 @@ class DocumentProcessor:
                 "total_pages": len(pages_data),
             }
 
-            # 4. Layout analysis + reading order reconstruction
-            pages_data = self._apply_layout_analysis(pages_data)
+            # 4. Layout analysis already applied per page above
             yield {"type": "progress", "stage": "layout_analysis_complete"}
 
-            # 5. Noise removal
+            # 5. Noise removal (requires all pages for header/footer detection)
             pages_data = self._noise_remover.remove_noise(pages_data)
             yield {"type": "progress", "stage": "noise_removal_complete"}
 
-            # 6. Section classification
-            pages_data = self._apply_section_classification(pages_data)
+            # 6. Section classification per page + emit page_processed events
+            classified_pages = []
+            for page in pages_data:
+                page = self._apply_section_classification_single(page)
+                classified_pages.append(page)
+                yield {
+                    "type": "page_processed",
+                    "data": {
+                        "page_number": page["page_number"],
+                        "text": page["text"],
+                        "metadata": {
+                            "blocks_count": len(page.get("blocks", [])),
+                        },
+                    },
+                }
+            pages_data = classified_pages
             yield {"type": "progress", "stage": "section_classification_complete"}
 
-            # 7. Image detection and description (optional)
+            # 7. Image detection and description (optional), emitting per-image events
             detect_images = chunk_options.get("detect_images", True)
             if detect_images:
-                pages_data = self._apply_image_detection(temp_path, pages_data, chunk_options)
+                pages_data = yield from self._apply_image_detection(
+                    temp_path, pages_data, chunk_options
+                )
                 yield {"type": "progress", "stage": "image_detection_complete"}
 
             # 8. Chunking (strategy-aware)
@@ -208,30 +236,31 @@ class DocumentProcessor:
 
     def _apply_layout_analysis(self, pages_data: List[Dict]) -> List[Dict]:
         """Apply layout analysis and reading order reconstruction to all pages."""
-        result = []
-        for page in pages_data:
-            blocks = page.get("blocks", [])
-            if blocks:
-                blocks = self._layout_analyzer.analyze(blocks)
-                blocks = self._order_reconstructor.reconstruct(blocks)
-                # Re-build text from sorted blocks
-                text = "\n\n".join(
-                    b["text"] for b in blocks if b.get("text", "").strip()
-                )
-                result.append({**page, "blocks": blocks, "text": text})
-            else:
-                result.append(page)
-        return result
+        return [self._apply_layout_analysis_single(page) for page in pages_data]
+
+    def _apply_layout_analysis_single(self, page: Dict) -> Dict:
+        """Apply layout analysis and reading order reconstruction to a single page."""
+        blocks = page.get("blocks", [])
+        if blocks:
+            blocks = self._layout_analyzer.analyze(blocks)
+            blocks = self._order_reconstructor.reconstruct(blocks)
+            # Re-build text from sorted blocks
+            text = "\n\n".join(
+                b["text"] for b in blocks if b.get("text", "").strip()
+            )
+            return {**page, "blocks": blocks, "text": text}
+        return page
 
     def _apply_section_classification(self, pages_data: List[Dict]) -> List[Dict]:
         """Apply semantic section classification to all page blocks."""
-        result = []
-        for page in pages_data:
-            blocks = page.get("blocks", [])
-            if blocks:
-                blocks = self._section_classifier.classify_blocks(blocks)
-            result.append({**page, "blocks": blocks})
-        return result
+        return [self._apply_section_classification_single(page) for page in pages_data]
+
+    def _apply_section_classification_single(self, page: Dict) -> Dict:
+        """Apply semantic section classification to a single page's blocks."""
+        blocks = page.get("blocks", [])
+        if blocks:
+            blocks = self._section_classifier.classify_blocks(blocks)
+        return {**page, "blocks": blocks}
 
     def _chunk_with_strategy(
         self,
@@ -259,9 +288,12 @@ class DocumentProcessor:
         pdf_path: str,
         pages_data: List[Dict],
         chunk_options: Dict[str, Any],
-    ) -> List[Dict]:
+    ) -> Generator[Dict, None, List[Dict]]:
         """
         Detect images in the PDF and enrich each page with LLM-generated descriptions.
+
+        Yields image_described events for each image as it is processed.
+        Returns the enriched pages_data list (via generator return value).
 
         Descriptions are stored in 'image_descriptions' on each page and also
         appended to the page text so they are included in the RAG context.
@@ -277,19 +309,26 @@ class DocumentProcessor:
 
         logger.info(f"Detectadas {len(images)} imagens; gerando descrições...")
 
+        descriptions_by_page: Dict[int, list] = {}
         try:
             descriptor = self._get_image_descriptor(chunk_options)
-            image_descriptions = descriptor.describe_images(images)
+            for desc in descriptor.describe_images_iter(images):
+                descriptions_by_page.setdefault(desc.page_number, []).append(desc)
+                yield {
+                    "type": "image_described",
+                    "data": {
+                        "page_number": desc.page_number,
+                        "image_index": desc.image_info.image_index,
+                        "description": desc.description,
+                        "width": desc.image_info.width,
+                        "height": desc.image_info.height,
+                    },
+                }
         except Exception as e:
             logger.warning(f"Falha na descrição de imagens: {e}")
             return pages_data
 
-        # Group descriptions by page number
-        descriptions_by_page: Dict[int, list] = {}
-        for desc in image_descriptions:
-            descriptions_by_page.setdefault(desc.page_number, []).append(desc)
-
-        # Enrich pages_data
+        # Enrich pages_data with collected descriptions
         result = []
         for page in pages_data:
             page_num = page["page_number"]

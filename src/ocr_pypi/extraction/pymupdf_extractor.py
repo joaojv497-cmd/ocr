@@ -1,6 +1,6 @@
 """PyMuPDF-based text extractor for digital PDFs."""
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 import fitz
 from ocr_pypi.extraction.text_extractor import TextExtractor
 
@@ -10,20 +10,20 @@ logger = logging.getLogger(__name__)
 class PyMuPDFExtractor(TextExtractor):
     """Extract text with layout information from digital PDFs using PyMuPDF."""
 
-    def extract_with_layout(self, pdf_path: str) -> List[Dict[str, Any]]:
+    def extract_with_layout(self, pdf_path: str) -> Generator[Dict[str, Any], None, None]:
         """
-        Extract structured text from a digital PDF.
+        Extract structured text from a digital PDF, yielding one page at a time.
 
         Args:
             pdf_path: Path to the PDF file.
 
-        Returns:
-            List of page dicts with text and block-level layout info.
+        Yields:
+            Page dicts with text and block-level layout info.
         """
-        pages_data: List[Dict[str, Any]] = []
         pdf = fitz.open(pdf_path)
+        page_count = len(pdf)
 
-        for page_idx in range(len(pdf)):
+        for page_idx in range(page_count):
             page = pdf.load_page(page_idx)
             page_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
 
@@ -72,12 +72,11 @@ class PyMuPDFExtractor(TextExtractor):
                 page_text_parts.append(block_text)
 
             full_text = "\n\n".join(page_text_parts)
-            pages_data.append({
+            yield {
                 "page_number": page_idx + 1,
                 "text": full_text,
                 "blocks": blocks_info,
-            })
+            }
 
         pdf.close()
-        logger.info(f"PyMuPDF extracted {len(pages_data)} pages from {pdf_path}")
-        return pages_data
+        logger.info(f"PyMuPDF extracted {page_count} pages from {pdf_path}")

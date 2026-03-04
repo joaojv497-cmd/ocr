@@ -159,6 +159,27 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     template_used=template_used,
                 )
 
+            elif result["type"] == "page_processed":
+                page_data = result["data"]
+                yield ocr_pb2.ProcessDocumentResponse(
+                    status=types_pb2.OCRStatus.PROCESSING,
+                    page_numbers=[page_data["page_number"]],
+                    text=page_data["text"],
+                    chunk_metadata=json.dumps(page_data["metadata"], ensure_ascii=False),
+                    stage=types_pb2.OCRStage.EXTRACTING,
+                    template_used=template_used,
+                )
+
+            elif result["type"] == "image_described":
+                image_data = result["data"]
+                yield ocr_pb2.ProcessDocumentResponse(
+                    status=types_pb2.OCRStatus.PROCESSING,
+                    page_numbers=[image_data["page_number"]],
+                    chunk_metadata=json.dumps(image_data, ensure_ascii=False),
+                    stage=types_pb2.OCRStage.EXTRACTING,
+                    template_used=template_used,
+                )
+
             elif result["type"] == "complete":
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.COMPLETED,
@@ -266,10 +287,12 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
             "download_complete": types_pb2.OCRStage.DOWNLOADING,
             "type_detection_complete": types_pb2.OCRStage.EXTRACTING,
+            "page_extracted": types_pb2.OCRStage.EXTRACTING,
             "text_extraction_complete": types_pb2.OCRStage.EXTRACTING,
             "layout_analysis_complete": types_pb2.OCRStage.EXTRACTING,
             "noise_removal_complete": types_pb2.OCRStage.EXTRACTING,
             "section_classification_complete": types_pb2.OCRStage.EXTRACTING,
+            "image_detection_complete": types_pb2.OCRStage.EXTRACTING,
             "llm_chunking_starting": types_pb2.OCRStage.CHUNKING,
             "semantic_chunking_starting": types_pb2.OCRStage.CHUNKING,
             "paragraph_chunking_starting": types_pb2.OCRStage.CHUNKING,
