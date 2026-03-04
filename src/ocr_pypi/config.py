@@ -1,4 +1,5 @@
 import os
+import pytesseract
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,5 +33,6 @@ class Settings:
         "EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
     )
     SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
+    TESSERACT_CMD:  str = os.getenv("TESSERACT_CMD")
 
 settings = Settings()

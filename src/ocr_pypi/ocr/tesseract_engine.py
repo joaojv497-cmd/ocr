@@ -1,5 +1,6 @@
 """Tesseract OCR engine implementation."""
 import logging
+import os
 from typing import List
 import pytesseract
 from PIL import Image
@@ -18,16 +19,6 @@ class TesseractEngine(OCREngine):
         image: Image.Image,
         lang: str = "por",
     ) -> List[OCRBlock]:
-        """
-        Extract text with bounding-box layout from an image using Tesseract.
-
-        Args:
-            image: PIL Image to process.
-            lang: Tesseract language string (default 'por').
-
-        Returns:
-            List of OCRBlock instances with coordinates and confidence.
-        """
         try:
             data = pytesseract.image_to_data(
                 image,

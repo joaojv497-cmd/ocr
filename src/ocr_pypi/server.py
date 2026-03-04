@@ -1,9 +1,9 @@
 import grpc
 from concurrent import futures
+
+from Ocr import ocr_pb2_grpc, ocr_pb2
 from grpc_reflection.v1alpha import reflection
 import logging
-
-from ocr_pypi.proto import ocr_pb2, ocr_pb2_grpc
 
 from ocr_pypi.config import settings
 from ocr_pypi.grpc_server import OCRGrpcServer

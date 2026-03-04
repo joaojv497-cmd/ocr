@@ -3,10 +3,11 @@ import json
 import os
 from typing import Any, Dict
 
+import pytesseract
+from Ocr import ocr_pb2_grpc, ocr_pb2
+from Util import types_pb2
 from commons_pypi.llm_providers.factory import LLMProviderFactory
 
-from ocr_pypi.proto import ocr_pb2_grpc, ocr_pb2
-import ocr_pypi.proto.types_pb2 as types_pb2
 
 from ocr_pypi.services.document_processor import DocumentProcessor
 from ocr_pypi.storage import get_storage
@@ -22,32 +23,35 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PROTO_TO_PROVIDER = {
-    ocr_pb2.LLM_PROVIDER_OPENAI: "openai",
-    ocr_pb2.LLM_PROVIDER_ANTHROPIC: "anthropic",
+    types_pb2.LLM_PROVIDER_OPENAI: "openai",
+    types_pb2.LLM_PROVIDER_ANTHROPIC: "anthropic",
 }
 
 PROVIDER_TO_PROTO = {v: k for k, v in PROTO_TO_PROVIDER.items()}
 
 PROTO_TO_LANGUAGE = {
-    ocr_pb2.OCR_LANGUAGE_PORTUGUESE: "por",
-    ocr_pb2.OCR_LANGUAGE_ENGLISH: "eng",
-    ocr_pb2.OCR_LANGUAGE_SPANISH: "spa",
-    ocr_pb2.OCR_LANGUAGE_FRENCH: "fra",
-    ocr_pb2.OCR_LANGUAGE_GERMAN: "deu",
-    ocr_pb2.OCR_LANGUAGE_ITALIAN: "ita",
+    types_pb2.OCR_LANGUAGE_PORTUGUESE: "por",
+    types_pb2.OCR_LANGUAGE_ENGLISH: "eng",
+    types_pb2.OCR_LANGUAGE_SPANISH: "spa",
+    types_pb2.OCR_LANGUAGE_FRENCH: "fra",
+    types_pb2.OCR_LANGUAGE_GERMAN: "deu",
+    types_pb2.OCR_LANGUAGE_ITALIAN: "ita",
 }
 
 LANGUAGE_TO_PROTO = {v: k for k, v in PROTO_TO_LANGUAGE.items()}
 
 PROTO_TO_CHUNKING = {
-    ocr_pb2.CHUNKING_METHOD_LLM: "llm",
-    ocr_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
-    ocr_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
-    ocr_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
+    types_pb2.CHUNKING_METHOD_LLM: "llm",
+    types_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
+    types_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
+    types_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
 }
 
 CHUNKING_TO_PROTO = {v: k for k, v in PROTO_TO_CHUNKING.items()}
 
+tesseract_env = os.getenv("TESSERACT_CMD")
+if tesseract_env:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_env
 
 def _proto_section_to_dict(section_proto) -> Dict[str, Any]:
     """Converts a TemplateSection proto message to a dict compatible with DynamicTemplate."""
@@ -102,7 +106,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             "template_instance": template_instance,
 
             # LLM Provider (dinâmico por request)
-            "llm_provider": PROTO_TO_PROVIDER.get(llm_config.provider) if llm_config.provider != ocr_pb2.LLM_PROVIDER_UNSPECIFIED else None,
+            "llm_provider": PROTO_TO_PROVIDER.get(llm_config.provider) if llm_config.provider != types_pb2.LLM_PROVIDER_UNSPECIFIED else None,
             "llm_model": llm_config.model or None,
             "llm_api_key": llm_api_key,
             "llm_temperature": llm_config.temperature if llm_config.temperature > 0 else None,
