@@ -159,13 +159,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     template_used=template_used,
                 )
 
-            elif result["type"] == "progress":
-                yield ocr_pb2.ProcessDocumentResponse(
-                    status=types_pb2.OCRStatus.PROCESSING,
-                    stage=self._map_stage(result.get("stage", "")),
-                    progress=result.get("progress", 0),
-                )
-
             elif result["type"] == "complete":
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.COMPLETED,
