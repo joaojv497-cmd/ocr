@@ -11,7 +11,6 @@ from PIL import Image
 import io
 
 from commons_pypi.storage import get_temp_file
-from ocr_pypi.chunking.llm_chunker import LLMChunker
 from ocr_pypi.chunking.chunking_strategy import ChunkingStrategy
 from ocr_pypi.storage import get_storage
 from ocr_pypi.config import settings
@@ -38,7 +37,7 @@ class DocumentProcessor:
     3. Analyze layout and reconstruct reading order
     4. Remove headers/footers/noise
     5. Classify sections semantically (hybrid)
-    6. Apply LLM chunking with appropriate template
+    6. Apply chunking with the configured strategy (llm, semantic, paragraph, or hybrid)
     7. Validate and enrich chunks
     8. Generate structured JSON output
     """
@@ -229,50 +228,8 @@ class DocumentProcessor:
         chunk_options: Dict[str, Any],
     ) -> Generator[Dict, None, None]:
         """Dispatch chunking to the configured strategy."""
-        # Chunking está SEMPRE habilitado
-        # Sempre usa estratégia LLM
-        strategy = "llm"
+        strategy = chunk_options.get("chunk_strategy", "llm")
         yield from ChunkingStrategy.chunk(pages_data, strategy, chunk_options)
-
-    def _chunk_with_llm(
-        self,
-        pages_data: List[Dict[str, Any]],
-        chunk_options: Dict[str, Any],
-    ) -> Generator[Dict, None, None]:
-        """Perform LLM-based chunking with dynamic provider and template."""
-        provider_kwargs = {
-            k: v for k, v in {
-                "provider_name": chunk_options.get("llm_provider"),
-                "api_key": chunk_options.get("llm_api_key"),
-                "model": chunk_options.get("llm_model"),
-                "temperature": chunk_options.get("llm_temperature"),
-                "max_tokens": chunk_options.get("llm_max_tokens"),
-            }.items() if v is not None
-        }
-
-        chunker = LLMChunker(**provider_kwargs)
-        template_name = chunk_options.get("template") or None
-
-        yield {
-            "type": "progress",
-            "stage": "llm_chunking_starting",
-            "template": template_name,
-            "provider": chunker.provider.provider_name,
-            "model": chunker.provider.model,
-        }
-
-        chunks = chunker.chunk(pages=pages_data, template_name=template_name)
-
-        yield {
-            "type": "progress",
-            "stage": "chunking_complete",
-            "total_chunks": len(chunks),
-        }
-
-        for chunk in chunks:
-            yield {"type": "chunk", "data": chunk}
-
-        yield {"type": "complete", "total_chunks": len(chunks)}
 
     def _extract_text(self, pdf_path: str) -> Generator[Dict, None, None]:
         """
