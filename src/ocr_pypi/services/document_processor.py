@@ -273,6 +273,15 @@ class DocumentProcessor:
             descriptor = self._get_image_descriptor(chunk_options)
             for desc in descriptor.describe_images_iter(images):
                 descriptions_by_page.setdefault(desc.page_number, []).append(desc)
+                chunk_meta = {
+                    "chunking_method": "image_description",
+                    "image_index": desc.image_info.image_index,
+                    "width": desc.image_info.width,
+                    "height": desc.image_info.height,
+                    "processing_status": desc.metadata.get("processing_status", "success"),
+                }
+                if desc.error_type is not None:
+                    chunk_meta["error_type"] = desc.error_type
                 yield {
                     "type": "chunk",
                     "data": Chunk(
@@ -282,12 +291,7 @@ class DocumentProcessor:
                         ),
                         page_numbers=[desc.page_number],
                         chunk_index=image_chunk_idx,
-                        metadata={
-                            "chunking_method": "image_description",
-                            "image_index": desc.image_info.image_index,
-                            "width": desc.image_info.width,
-                            "height": desc.image_info.height,
-                        },
+                        metadata=chunk_meta,
                         detected_areas=[],
                     ),
                 }

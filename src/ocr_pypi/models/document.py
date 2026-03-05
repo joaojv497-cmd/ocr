@@ -92,6 +92,8 @@ class ImageDescription:
     image_info: ImageInfo
     description: str
     page_number: int
+    success: bool = True
+    error_type: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
