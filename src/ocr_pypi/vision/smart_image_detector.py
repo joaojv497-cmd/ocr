@@ -12,8 +12,8 @@ from ocr_pypi.models.document import BoundingBox, ImageInfo
 logger = logging.getLogger(__name__)
 
 # Minimum image dimensions to be considered content-relevant
-DEFAULT_MIN_IMAGE_WIDTH = 300
-DEFAULT_MIN_IMAGE_HEIGHT = 300
+DEFAULT_MIN_IMAGE_WIDTH = 700
+DEFAULT_MIN_IMAGE_HEIGHT = 200
 
 # Page zones to exclude (header top 15%, footer bottom 15%)
 HEADER_ZONE_RATIO = 0.15

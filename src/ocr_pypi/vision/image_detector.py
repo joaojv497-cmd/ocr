@@ -11,8 +11,8 @@ from ocr_pypi.models.document import BoundingBox, ImageInfo
 logger = logging.getLogger(__name__)
 
 # Minimum image dimensions to be considered relevant
-MIN_IMAGE_WIDTH = 100
-MIN_IMAGE_HEIGHT = 100
+MIN_IMAGE_WIDTH = 200
+MIN_IMAGE_HEIGHT = 300
 
 
 class ImageDetector:
