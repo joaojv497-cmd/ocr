@@ -45,6 +45,8 @@ PROTO_TO_CHUNKING = {
     types_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
 }
 
+CHUNKING_TO_PROTO = {v: k for k, v in PROTO_TO_CHUNKING.items()}
+
 
 # Method identifier for chunks generated via LLM image description (e.g., Vision API)
 IMAGE_DESCRIPTION_METHOD = "image_description"
@@ -110,25 +112,30 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.PROCESSING,
-                    page_numbers=chunk.page_numbers,
-                    text=chunk.content,
+                    chunk_index=int(chunk.chunk_index),
+                    page_numbers=[int(p) for p in chunk.page_numbers],
+                    text=str(chunk.content),
                     chunk_metadata=json.dumps(chunk.metadata, ensure_ascii=False),
+                    chunking_method=CHUNKING_TO_PROTO.get(
+                        chunk.metadata.get("chunking_method", chunk_strategy),
+                        types_pb2.CHUNKING_METHOD_UNSPECIFIED,
+                    ),
                     content_source=content_source,
-                    template_used=template_used,
+                    template_used=template_used or "",
                 )
 
             elif result["type"] == "complete":
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
-                    total_chunks=result["total_chunks"],
-                    template_used=template_used,
+                    total_chunks=int(result["total_chunks"]),
+                    template_used=template_used or "",
                 )
 
             elif result["type"] == "error":
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.FAILED,
-                    error_message=result["message"],
+                    error_message=str(result["message"]),
                 )
 
     def ListProviders(self, request, context):
