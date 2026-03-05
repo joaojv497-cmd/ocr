@@ -50,7 +50,7 @@ class ImagePreprocessor:
         image: Image.Image,
         max_width: int = 1024,
         max_height: int = 1024,
-        jpeg_quality: int = 85,
+        jpeg_quality: int = 55,
     ) -> bytes:
         """
         Preprocess image for Vision LLM: resize to max dimensions and encode as JPEG.
