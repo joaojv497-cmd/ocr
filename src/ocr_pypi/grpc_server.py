@@ -41,14 +41,19 @@ PROTO_TO_LANGUAGE = {
 LANGUAGE_TO_PROTO = {v: k for k, v in PROTO_TO_LANGUAGE.items()}
 
 PROTO_TO_CHUNKING = {
-    types_pb2.CHUNKING_METHOD_UNSPECIFIED: "unspecified",
-    types_pb2.CHUNKING_METHOD_LLM: "llm",
+    types_pb2.CHUNKING_METHOD_UNSPECIFIED: "page",
+    types_pb2.CHUNKING_METHOD_LLM: "page",
     types_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
     types_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
-    types_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
+    types_pb2.CHUNKING_METHOD_HYBRID: "page",
 }
 
-CHUNKING_TO_PROTO = {v: k for k, v in PROTO_TO_CHUNKING.items()}
+CHUNKING_TO_PROTO = {
+    "page": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
+    "semantic": types_pb2.CHUNKING_METHOD_SEMANTIC,
+    "paragraph": types_pb2.CHUNKING_METHOD_PARAGRAPH,
+    "image_description": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
+}
 
 tesseract_env = os.getenv("TESSERACT_CMD")
 if tesseract_env:
@@ -75,23 +80,7 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
         # Resolve chunking method
         chunking_method_proto = request.chunking_method
-        chunk_strategy = PROTO_TO_CHUNKING.get(chunking_method_proto, "unspecified")
-
-        # Resolve template from request.template (regular field, not oneof)
-        template_instance = None
-        template_name = None
-        template_proto = request.template
-        if template_proto.name:
-            definition = {
-                "template_name": template_proto.name,
-                "description": template_proto.description,
-                "sections": [_proto_section_to_dict(s) for s in template_proto.sections],
-            }
-            try:
-                template_instance = TemplateRegistry.register_dynamic(definition)
-                logger.info(f"Dynamic template registered: {template_instance.name}")
-            except ValueError as e:
-                logger.warning(f"Invalid template in request: {e}")
+        chunk_strategy = PROTO_TO_CHUNKING.get(chunking_method_proto, "page")
 
         # Extract LLM config (API key ONLY from environment)
         llm_config = request.llm_config
@@ -99,14 +88,10 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
 
         # Monta chunk_options a partir do request
         chunk_options = {
-            "enable_chunking": True,  # SEMPRE True - chunks são obrigatórios
+            "enable_chunking": True,
             "chunk_strategy": chunk_strategy,
 
-            # Template
-            "template": template_name,
-            "template_instance": template_instance,
-
-            # LLM Provider (dinâmico por request)
+            # LLM Provider (used for image description)
             "llm_provider": PROTO_TO_PROVIDER.get(llm_config.provider) if llm_config.provider != types_pb2.LLM_PROVIDER_UNSPECIFIED else None,
             "llm_model": llm_config.model or None,
             "llm_api_key": llm_api_key,
@@ -114,30 +99,13 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             "llm_max_tokens": llm_config.max_tokens if llm_config.max_tokens > 0 else None,
         }
 
-        # Validar que template e LLM config foram fornecidos (somente para LLM)
-        if chunk_strategy == "llm":
-            if not template_instance and not template_name:
-                context.abort(
-                    grpc.StatusCode.INVALID_ARGUMENT,
-                    "Template é obrigatório para chunking LLM. Envie a definição completa no campo 'template'."
-                )
-            if not llm_api_key:
-                context.abort(
-                    grpc.StatusCode.INVALID_ARGUMENT,
-                    "Variável de ambiente LLM_API_KEY não configurada."
-                )
-
         logger.info(
             f"ProcessDocument: strategy={chunk_strategy}, "
             f"provider={chunk_options['llm_provider'] or 'default'}, "
-            f"template={chunk_options['template'] or (template_instance.name if template_instance else 'none')}, "
             f"model={chunk_options['llm_model'] or 'default'}"
         )
 
-        template_used = (
-            template_instance.name if template_instance
-            else (template_name or "")
-        )
+        template_used = ""
 
         for result in processor.process(request.bucket, request.file_key, chunk_options):
             if not context.is_active():
@@ -156,27 +124,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                         chunk.metadata.get("chunking_method", chunk_strategy),
                         types_pb2.CHUNKING_METHOD_UNSPECIFIED,
                     ),
-                    template_used=template_used,
-                )
-
-            elif result["type"] == "page_processed":
-                page_data = result["data"]
-                yield ocr_pb2.ProcessDocumentResponse(
-                    status=types_pb2.OCRStatus.PROCESSING,
-                    page_numbers=[page_data["page_number"]],
-                    text=page_data["text"],
-                    chunk_metadata=json.dumps(page_data["metadata"], ensure_ascii=False),
-                    stage=types_pb2.OCRStage.EXTRACTING,
-                    template_used=template_used,
-                )
-
-            elif result["type"] == "image_described":
-                image_data = result["data"]
-                yield ocr_pb2.ProcessDocumentResponse(
-                    status=types_pb2.OCRStatus.PROCESSING,
-                    page_numbers=[image_data["page_number"]],
-                    chunk_metadata=json.dumps(image_data, ensure_ascii=False),
-                    stage=types_pb2.OCRStage.EXTRACTING,
                     template_used=template_used,
                 )
 

@@ -1,4 +1,5 @@
 """Semantic chunker using sentence embeddings (no LLM required)."""
+import re
 import logging
 from typing import List, Dict, Any, Optional
 import numpy as np
@@ -82,15 +83,58 @@ class SemanticChunker:
     def _extract_paragraphs(
         self, pages: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Split pages into individual paragraphs with page metadata."""
-        paragraphs = []
+        """Split all pages into paragraphs, treating the full document as a
+        single text stream to avoid cutting paragraphs at page boundaries."""
+        # Build a combined string from all pages, joining consecutive pages
+        # with a single newline so that double-newlines only appear where the
+        # original text had explicit paragraph breaks (not at page boundaries).
+        page_boundaries: List[tuple] = []  # (start_offset, page_number)
+        parts: List[str] = []
+        offset = 0
+
         for page in pages:
             text = page.get("text", "")
             page_num = page.get("page_number", 1)
-            for para in text.split("\n\n"):
-                para = para.strip()
-                if len(para) >= self._min_chunk_chars // 4:
-                    paragraphs.append({"text": para, "page_number": page_num})
+            if parts:
+                parts.append("\n")
+                offset += 1
+            page_boundaries.append((offset, page_num))
+            parts.append(text)
+            offset += len(text)
+
+        if not page_boundaries:
+            return []
+
+        combined = "".join(parts)
+
+        def _page_for(pos: int) -> int:
+            """Return the page number covering character offset *pos*."""
+            result = page_boundaries[0][1]
+            for boundary, page_num in page_boundaries:
+                if pos >= boundary:
+                    result = page_num
+                else:
+                    break
+            return result
+
+        # Use a capturing split so we know the exact length of each separator.
+        # tokens alternates: [text, sep, text, sep, ..., text]
+        tokens = re.split(r"(\n{2,})", combined)
+        min_len = max(1, self._min_chunk_chars // 4)
+        paragraphs: List[Dict[str, Any]] = []
+        current = 0
+        idx = 0
+        while idx < len(tokens):
+            raw = tokens[idx]
+            para = raw.strip()
+            if len(para) >= min_len:
+                paragraphs.append({"text": para, "page_number": _page_for(current)})
+            current += len(raw)
+            idx += 1
+            if idx < len(tokens):  # skip the separator token
+                current += len(tokens[idx])
+                idx += 1
+
         return paragraphs
 
     def _semantic_chunk(

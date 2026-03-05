@@ -6,12 +6,11 @@ from ocr_pypi.models.document import Chunk
 
 logger = logging.getLogger(__name__)
 
-STRATEGY_LLM = "llm"
+STRATEGY_PAGE = "page"
 STRATEGY_SEMANTIC = "semantic"
 STRATEGY_PARAGRAPH = "paragraph"
-STRATEGY_HYBRID = "hybrid"
 
-_VALID_STRATEGIES = {STRATEGY_LLM, STRATEGY_SEMANTIC, STRATEGY_PARAGRAPH, STRATEGY_HYBRID}
+_VALID_STRATEGIES = {STRATEGY_PAGE, STRATEGY_SEMANTIC, STRATEGY_PARAGRAPH}
 
 
 class ChunkingStrategy:
@@ -19,10 +18,9 @@ class ChunkingStrategy:
     Factory and dispatcher for chunking strategies.
 
     Supported strategies:
-        "llm"       - Uses LLMChunker (default)
-        "semantic"  - Uses SemanticChunker (sentence embeddings)
-        "paragraph" - Uses ParagraphChunker (simple paragraph splitting)
-        "hybrid"    - Runs LLMChunker first; falls back to SemanticChunker on error
+        "page"      - Uses PageChunker (one chunk per page)
+        "semantic"  - Uses SemanticChunker (sentence embeddings, cross-page)
+        "paragraph" - Uses ParagraphChunker (paragraph splitting, cross-page)
     """
 
     @staticmethod
@@ -34,70 +32,40 @@ class ChunkingStrategy:
         """
         Dispatch chunking to the appropriate strategy implementation.
 
-        Yields progress/chunk/complete dicts compatible with DocumentProcessor.
+        Yields chunk/complete dicts compatible with DocumentProcessor.
 
         Args:
             pages: Extracted pages list.
-            strategy: One of 'llm', 'semantic', 'paragraph', 'hybrid'.
+            strategy: One of 'page', 'semantic', 'paragraph'.
             chunk_options: Options dict (see DocumentProcessor.process docs).
         """
-        strategy = (strategy or STRATEGY_LLM).lower()
+        strategy = (strategy or STRATEGY_PAGE).lower()
         if strategy not in _VALID_STRATEGIES:
             logger.warning(
-                f"Unknown chunking strategy '{strategy}'; falling back to 'llm'."
+                f"Unknown chunking strategy '{strategy}'; falling back to 'page'."
             )
-            strategy = STRATEGY_LLM
+            strategy = STRATEGY_PAGE
 
-        if strategy == STRATEGY_LLM:
-            yield from ChunkingStrategy._chunk_llm(pages, chunk_options)
+        if strategy == STRATEGY_PAGE:
+            yield from ChunkingStrategy._chunk_page(pages, chunk_options)
         elif strategy == STRATEGY_SEMANTIC:
             yield from ChunkingStrategy._chunk_semantic(pages, chunk_options)
         elif strategy == STRATEGY_PARAGRAPH:
             yield from ChunkingStrategy._chunk_paragraph(pages, chunk_options)
-        elif strategy == STRATEGY_HYBRID:
-            yield from ChunkingStrategy._chunk_hybrid(pages, chunk_options)
 
     # ------------------------------------------------------------------
     # Strategy implementations
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _chunk_llm(
+    def _chunk_page(
         pages: List[Dict[str, Any]],
         chunk_options: Dict[str, Any],
     ) -> Generator[Dict, None, None]:
-        from ocr_pypi.chunking.llm_chunker import LLMChunker
-        from ocr_pypi.config import settings
+        from ocr_pypi.chunking.page_chunker import PageChunker
 
-        provider_kwargs = {
-            k: v for k, v in {
-                "provider_name": chunk_options.get("llm_provider"),
-                "api_key": chunk_options.get("llm_api_key"),
-                "model": chunk_options.get("llm_model"),
-                "temperature": chunk_options.get("llm_temperature"),
-                "max_tokens": chunk_options.get("llm_max_tokens"),
-            }.items() if v is not None
-        }
-
-        chunker = LLMChunker(**provider_kwargs)
-
-        template_name = chunk_options.get("template") or None
-        template_instance = chunk_options.get("template_instance")
-
-        yield {
-            "type": "progress",
-            "stage": "llm_chunking_starting",
-            "template": template_name,
-            "provider": chunker.provider.provider_name,
-            "model": chunker.provider.model,
-        }
-
-        chunks = chunker.chunk(
-            pages=pages,
-            template_name=template_name if template_instance is None else None,
-            template=template_instance,
-        )
-
+        chunker = PageChunker()
+        chunks = chunker.chunk(pages=pages)
         yield from _emit_chunks(chunks)
 
     @staticmethod
@@ -122,8 +90,6 @@ class ChunkingStrategy:
             "similarity_threshold", settings.SIMILARITY_THRESHOLD
         )
 
-        yield {"type": "progress", "stage": "semantic_chunking_starting"}
-
         chunks = chunker.chunk(pages=pages, similarity_threshold=similarity_threshold)
 
         yield from _emit_chunks(chunks)
@@ -146,30 +112,9 @@ class ChunkingStrategy:
             chunk_overlap=chunk_overlap,
         )
 
-        yield {"type": "progress", "stage": "paragraph_chunking_starting"}
-
         chunks = chunker.chunk(pages=pages)
 
         yield from _emit_chunks(chunks)
-
-    @staticmethod
-    def _chunk_hybrid(
-        pages: List[Dict[str, Any]],
-        chunk_options: Dict[str, Any],
-    ) -> Generator[Dict, None, None]:
-        """LLM chunking with SemanticChunker as fallback."""
-        try:
-            results = list(ChunkingStrategy._chunk_llm(pages, chunk_options))
-            # Check if any chunk was produced
-            has_chunks = any(r.get("type") == "chunk" for r in results)
-            if has_chunks:
-                yield from results
-                return
-        except Exception as e:
-            logger.warning(f"LLM chunking failed in hybrid mode: {e}; falling back to semantic.")
-
-        yield {"type": "progress", "stage": "hybrid_fallback_to_semantic"}
-        yield from ChunkingStrategy._chunk_semantic(pages, chunk_options)
 
 
 # ------------------------------------------------------------------
@@ -177,12 +122,7 @@ class ChunkingStrategy:
 # ------------------------------------------------------------------
 
 def _emit_chunks(chunks: List[Chunk]) -> Generator[Dict, None, None]:
-    """Emit progress, chunk, and complete events for a list of Chunk objects."""
-    yield {
-        "type": "progress",
-        "stage": "chunking_complete",
-        "total_chunks": len(chunks),
-    }
+    """Emit chunk and complete events for a list of Chunk objects."""
     for chunk in chunks:
         yield {"type": "chunk", "data": chunk}
     yield {"type": "complete", "total_chunks": len(chunks)}
