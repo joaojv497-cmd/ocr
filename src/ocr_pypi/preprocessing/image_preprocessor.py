@@ -1,4 +1,5 @@
 """Image preprocessing module for improving OCR quality."""
+import io
 import logging
 from typing import Tuple, Optional
 import numpy as np
@@ -43,6 +44,50 @@ class ImagePreprocessor:
         else:
             image = self._pil_binarize(image)
         return image
+
+    def preprocess_for_vision(
+        self,
+        image: Image.Image,
+        max_width: int = 1024,
+        max_height: int = 1024,
+        jpeg_quality: int = 85,
+    ) -> bytes:
+        """
+        Preprocess image for Vision LLM: resize to max dimensions and encode as JPEG.
+
+        Maintains aspect ratio while reducing image size to minimise token costs.
+
+        Args:
+            image: Input PIL Image.
+            max_width: Maximum width in pixels.
+            max_height: Maximum height in pixels.
+            jpeg_quality: JPEG compression quality (1–95). Values above 95
+                disable JPEG compression algorithm optimisations and produce
+                disproportionately large files with negligible quality gain.
+
+        Returns:
+            JPEG-encoded image bytes.
+        """
+        image = self._resize_for_vision(image, max_width, max_height)
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG", quality=jpeg_quality, optimize=True)
+        return buf.getvalue()
+
+    def _resize_for_vision(
+        self,
+        image: Image.Image,
+        max_width: int,
+        max_height: int,
+    ) -> Image.Image:
+        """Resize image to fit within max dimensions maintaining aspect ratio."""
+        width, height = image.size
+        if width <= max_width and height <= max_height:
+            return image
+        ratio = min(max_width / width, max_height / height)
+        new_size = (int(width * ratio), int(height * ratio))
+        return image.resize(new_size, Image.LANCZOS)
 
     def resize_to_target_dpi(self, image: Image.Image, current_dpi: int) -> Image.Image:
         """Resize image to TARGET_DPI for consistent OCR quality."""
