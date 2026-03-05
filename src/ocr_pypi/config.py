@@ -23,7 +23,7 @@ class Settings:
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
     # Chunking strategy defaults
-    DEFAULT_CHUNK_STRATEGY: str = os.getenv("DEFAULT_CHUNK_STRATEGY", "llm")
+    DEFAULT_CHUNK_STRATEGY: str = os.getenv("DEFAULT_CHUNK_STRATEGY", "page")
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "4000"))
     MIN_CHUNK_SIZE: int = int(os.getenv("MIN_CHUNK_SIZE", "200"))
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "0"))
