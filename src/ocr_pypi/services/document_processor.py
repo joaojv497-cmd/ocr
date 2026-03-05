@@ -1,7 +1,5 @@
 """Document processor orchestrating the full OCR pipeline."""
 import os
-import uuid
-import time
 import logging
 from typing import Generator, List, Dict, Any, Optional
 
@@ -38,10 +36,9 @@ class DocumentProcessor:
     2b. Scanned: preprocess + OCR (Tesseract)
     3. Analyze layout and reconstruct reading order
     4. Remove headers/footers/noise
-    5. Classify sections semantically (hybrid)
-    6. Apply chunking with the configured strategy (llm, semantic, paragraph, or hybrid)
-    7. Validate and enrich chunks
-    8. Generate structured JSON output
+    5. Classify sections semantically
+    6. Detect and describe images with LLM (optional)
+    7. Apply chunking with the configured strategy (page, semantic, or paragraph)
     """
 
     def __init__(self, language: str = "por"):
@@ -64,35 +61,27 @@ class DocumentProcessor:
         chunk_options: Dict[str, Any] = None,
     ) -> Generator[Dict, None, None]:
         """
-        Process a document and yield progress events, chunks, and a final result.
+        Process a document and yield chunks and a final result.
 
         chunk_options may contain (all optional, fallback to env/settings):
-            - chunk_strategy: 'llm' (default) | 'semantic' | 'paragraph' | 'hybrid'
-            - template: template name
-            - template_instance: pre-built DocumentTemplate instance (overrides template)
-            - llm_provider: provider name
-            - llm_model: model name
-            - llm_api_key: API key
-            - llm_temperature: temperature
-            - llm_max_tokens: max tokens
+            - chunk_strategy: 'page' (default) | 'semantic' | 'paragraph'
+            - llm_provider: provider name (used for image description)
+            - llm_model: model name (used for image description)
+            - llm_api_key: API key (used for image description)
+            - llm_temperature: temperature (used for image description)
+            - llm_max_tokens: max tokens (used for image description)
             - chunk_size: max chunk chars (semantic/paragraph strategies)
             - chunk_overlap: overlap chars (paragraph strategy)
             - min_chunk_size: minimum chunk chars (semantic/paragraph)
             - embedding_model: sentence-transformer model name (semantic strategy)
             - similarity_threshold: cosine threshold (semantic strategy)
-            - preserve_structure: preserve document hierarchy (advanced)
-            - max_chunks_per_section: max chunks per section (advanced)
-            - metadata_fields: extra metadata fields to include (dict, from chunk_metadata_fields JSON)
             - detect_images: whether to detect and describe images (default: True)
 
         Yields:
-            Dict with 'type' in ('progress', 'page_processed', 'image_described',
-            'chunk', 'complete', 'error')
+            Dict with 'type' in ('chunk', 'complete', 'error')
         """
         temp_path = None
         chunk_options = chunk_options or {}
-        start_time = time.time()
-        document_id = str(uuid.uuid4())
 
         try:
             # 1. Download
@@ -100,19 +89,10 @@ class DocumentProcessor:
             temp_path = get_temp_file(".pdf")
             storage.download_file(file_key, temp_path)
 
-            yield {"type": "progress", "stage": "download_complete"}
-
             # 2. Detect PDF type
             type_result = self._detector.detect_type(temp_path)
-            yield {
-                "type": "progress",
-                "stage": "type_detection_complete",
-                "pdf_type": type_result.pdf_type.value,
-                "total_pages": type_result.total_pages,
-            }
 
             # 3. Extract text page by page, applying layout analysis per page
-            total_pages = type_result.total_pages
             if type_result.pdf_type == PDFType.DIGITAL:
                 page_iter = self._extractor.extract_with_layout(temp_path)
             elif type_result.pdf_type == PDFType.SCANNED:
@@ -124,57 +104,27 @@ class DocumentProcessor:
             for page in page_iter:
                 page = self._apply_layout_analysis_single(page)
                 pages_data.append(page)
-                yield {
-                    "type": "progress",
-                    "stage": "page_extracted",
-                    "page_number": page["page_number"],
-                    "total_pages": total_pages,
-                }
 
-            yield {
-                "type": "progress",
-                "stage": "text_extraction_complete",
-                "total_pages": len(pages_data),
-            }
-
-            # 4. Layout analysis already applied per page above
-            yield {"type": "progress", "stage": "layout_analysis_complete"}
-
-            # 5. Noise removal (requires all pages for header/footer detection)
+            # 4. Noise removal (requires all pages for header/footer detection)
             pages_data = self._noise_remover.remove_noise(pages_data)
-            yield {"type": "progress", "stage": "noise_removal_complete"}
 
-            # 6. Section classification per page (without emitting events yet)
+            # 5. Section classification per page
             classified_pages = []
             for page in pages_data:
                 page = self._apply_section_classification_single(page)
                 classified_pages.append(page)
             pages_data = classified_pages
-            yield {"type": "progress", "stage": "section_classification_complete"}
 
-            # 7. Image detection and description (optional), emitting per-image events
+            # 6. Image detection and description (optional)
+            # Image descriptions are emitted as chunk events and also appended
+            # to each page's text so they are included in text chunking.
             detect_images = chunk_options.get("detect_images", True)
             if detect_images:
                 pages_data = yield from self._apply_image_detection(
                     temp_path, pages_data, chunk_options
                 )
-                yield {"type": "progress", "stage": "image_detection_complete"}
 
-            # 8. Emit page_processed events with image descriptions included
-            for page in pages_data:
-                yield {
-                    "type": "page_processed",
-                    "data": {
-                        "page_number": page["page_number"],
-                        "text": page["text"],
-                        "image_descriptions": page.get("image_descriptions", []),
-                        "metadata": {
-                            "blocks_count": len(page.get("blocks", [])),
-                        },
-                    },
-                }
-
-            # 9. Chunking (strategy-aware)
+            # 7. Chunking (strategy-aware)
             yield from self._chunk_with_strategy(pages_data, chunk_options)
 
         except Exception as e:
@@ -272,7 +222,7 @@ class DocumentProcessor:
         chunk_options: Dict[str, Any],
     ) -> Generator[Dict, None, None]:
         """Dispatch chunking to the configured strategy."""
-        strategy = chunk_options.get("chunk_strategy", "llm")
+        strategy = chunk_options.get("chunk_strategy", "page")
         yield from ChunkingStrategy.chunk(pages_data, strategy, chunk_options)
 
     def _get_image_descriptor(self, chunk_options: Dict[str, Any]) -> ImageDescriptor:
@@ -296,12 +246,14 @@ class DocumentProcessor:
         """
         Detect images in the PDF and enrich each page with LLM-generated descriptions.
 
-        Yields image_described events for each image as it is processed.
-        Returns the enriched pages_data list (via generator return value).
+        Yields a chunk event for each image description so callers receive image
+        descriptions as first-class chunks alongside text chunks.  Descriptions are
+        also appended to the page text so they are included in downstream text chunking.
 
-        Descriptions are stored in 'image_descriptions' on each page and also
-        appended to the page text so they are included in the RAG context.
+        Returns the enriched pages_data list (via generator return value).
         """
+        from ocr_pypi.models.document import Chunk
+
         try:
             images = self._image_detector.detect_images(pdf_path)
         except Exception as e:
@@ -314,20 +266,30 @@ class DocumentProcessor:
         logger.info(f"Detectadas {len(images)} imagens; gerando descrições...")
 
         descriptions_by_page: Dict[int, list] = {}
+        image_chunk_idx = 0
         try:
             descriptor = self._get_image_descriptor(chunk_options)
             for desc in descriptor.describe_images_iter(images):
                 descriptions_by_page.setdefault(desc.page_number, []).append(desc)
                 yield {
-                    "type": "image_described",
-                    "data": {
-                        "page_number": desc.page_number,
-                        "image_index": desc.image_info.image_index,
-                        "description": desc.description,
-                        "width": desc.image_info.width,
-                        "height": desc.image_info.height,
-                    },
+                    "type": "chunk",
+                    "data": Chunk(
+                        content=(
+                            f"[IMAGEM {desc.image_info.image_index + 1} - "
+                            f"Página {desc.page_number}]: {desc.description}"
+                        ),
+                        page_numbers=[desc.page_number],
+                        chunk_index=image_chunk_idx,
+                        metadata={
+                            "chunking_method": "image_description",
+                            "image_index": desc.image_info.image_index,
+                            "width": desc.image_info.width,
+                            "height": desc.image_info.height,
+                        },
+                        detected_areas=[],
+                    ),
                 }
+                image_chunk_idx += 1
         except Exception as e:
             logger.warning(f"Falha na descrição de imagens: {e}")
             return pages_data
