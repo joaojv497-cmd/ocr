@@ -11,14 +11,22 @@ from ocr_pypi.models.document import ImageDescription, ImageInfo
 
 logger = logging.getLogger(__name__)
 
-DESCRIPTION_PROMPT = """Você é um especialista em análise de documentos.
-Descreva detalhadamente a imagem a seguir, que foi extraída de um documento PDF.
-Foque em:
-- Tipo de imagem (gráfico, tabela, foto, diagrama, assinatura, etc.)
-- Conteúdo principal e informações relevantes
-- Dados ou números visíveis
-- Texto presente na imagem
-Forneça uma descrição objetiva e completa em português."""
+JURIDIC_SYSTEM_PROMPT = (
+    "Você é um assistente especializado em análise de documentos jurídicos brasileiros. "
+    "Sempre responda EXCLUSIVAMENTE com JSON válido, sem texto adicional."
+)
+
+JURIDIC_VISION_PROMPT = (
+    "Você é um especialista em análise de documentos jurídicos brasileiros. "
+    "Analise detalhadamente esta imagem extraída de um documento PDF jurídico. "
+    "Foque em: "
+    "- Tipo de imagem (gráfico, tabela, foto, diagrama, assinatura, carimbo, etc.) "
+    "- Conteúdo principal e informações jurídicas relevantes "
+    "- Dados, números, valores ou datas visíveis "
+    "- Texto presente na imagem (especialmente nomes, cargos, órgãos) "
+    "- Elementos jurídicos específicos (carimbos de tribunal, assinaturas de autoridades, etc.) "
+    "Forneça uma descrição objetiva e completa em português, priorizando aspectos juridicamente relevantes."
+)
 
 
 class ImageDescriptor:
@@ -32,13 +40,42 @@ class ImageDescriptor:
         model: str = None,
         temperature: float = None,
         max_tokens: int = None,
+        system_prompt: str = None,
+        vision_system_prompt: str = None,
     ):
         """
         Inicializa o ImageDescriptor.
 
         Pode receber um provider já instanciado OU parâmetros para criar via factory.
         Se nada for informado, usa as configs do settings.
+
+        Args:
+            provider: Provider LLM já instanciado (opcional).
+            provider_name: Nome do provider (ex: 'openai', 'anthropic').
+            api_key: Chave de API do provider.
+            model: Nome do modelo a usar.
+            temperature: Temperatura para geração de texto.
+            max_tokens: Número máximo de tokens na resposta.
+            system_prompt: Prompt de sistema para chamadas de texto. Se não
+                informado (ou ``None``), usa ``settings.LLM_SYSTEM_PROMPT``
+                (variável de ambiente ``LLM_SYSTEM_PROMPT``) quando definida, ou
+                o padrão jurídico ``JURIDIC_SYSTEM_PROMPT`` como fallback final.
+            vision_system_prompt: Prompt de sistema para chamadas de visão. Se
+                não informado (ou ``None``), usa ``settings.LLM_VISION_PROMPT``
+                (variável de ambiente ``LLM_VISION_PROMPT``) quando definida, ou
+                o padrão jurídico ``JURIDIC_VISION_PROMPT`` como fallback final.
         """
+        resolved_system_prompt = (
+            system_prompt
+            or settings.LLM_SYSTEM_PROMPT
+            or JURIDIC_SYSTEM_PROMPT
+        )
+        resolved_vision_prompt = (
+            vision_system_prompt
+            or settings.LLM_VISION_PROMPT
+            or JURIDIC_VISION_PROMPT
+        )
+
         if provider:
             self.provider = provider
         else:
@@ -48,8 +85,11 @@ class ImageDescriptor:
                 model=model or settings.LLM_MODEL,
                 temperature=temperature if temperature is not None else settings.LLM_TEMPERATURE,
                 max_tokens=max_tokens or settings.LLM_MAX_TOKENS,
+                system_prompt=resolved_system_prompt,
+                vision_system_prompt=resolved_vision_prompt,
             )
 
+        self._vision_prompt = resolved_vision_prompt
         logger.info(f"ImageDescriptor inicializado com {self.provider}")
 
     def describe_images(
@@ -117,7 +157,7 @@ class ImageDescriptor:
         # Try vision-capable method first
         if hasattr(self.provider, "generate_with_image"):
             return self.provider.generate_with_image(
-                prompt=DESCRIPTION_PROMPT,
+                prompt=self._vision_prompt,
                 image_base64=image_b64,
                 image_mime_type="image/png",
             )
