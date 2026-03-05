@@ -22,20 +22,18 @@ class NoVisionSupportError(Exception):
 
 
 JURIDIC_SYSTEM_PROMPT = (
-    "Você é um assistente especializado em análise de documentos jurídicos brasileiros. "
-    "Sempre responda EXCLUSIVAMENTE com JSON válido, sem texto adicional."
+    "Você é um assistente especializado em análise de documentos. "
+    "Forneça análises claras e objetivas."
 )
 
 JURIDIC_VISION_PROMPT = (
-    "Você é um especialista em análise de documentos jurídicos brasileiros. "
-    "Analise detalhadamente esta imagem extraída de um documento PDF jurídico. "
+    "Analise esta imagem e descreva objetivamente o que você vê. "
     "Foque em: "
-    "- Tipo de imagem (gráfico, tabela, foto, diagrama, assinatura, carimbo, etc.) "
-    "- Conteúdo principal e informações jurídicas relevantes "
-    "- Dados, números, valores ou datas visíveis "
-    "- Texto presente na imagem (especialmente nomes, cargos, órgãos) "
-    "- Elementos jurídicos específicos (carimbos de tribunal, assinaturas de autoridades, etc.) "
-    "Forneça uma descrição objetiva e completa em português, priorizando aspectos juridicamente relevantes."
+    "- Tipo de conteúdo (texto, gráfico, tabela, foto, diagrama, etc.) "
+    "- Elementos visuais principais "
+    "- Texto presente na imagem "
+    "- Estrutura e layout "
+    "Forneça uma descrição clara e direta em português."
 )
 
 
