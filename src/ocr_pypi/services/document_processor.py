@@ -20,7 +20,6 @@ from ocr_pypi.layout.layout_analyzer import LayoutAnalyzer
 from ocr_pypi.layout.reading_order_reconstructor import ReadingOrderReconstructor
 from ocr_pypi.cleaning.noise_remover import NoiseRemover
 from ocr_pypi.semantic.section_classifier import SectionClassifier
-from ocr_pypi.output.json_formatter import JSONFormatter
 from ocr_pypi.vision.smart_image_detector import SmartImageDetector
 from ocr_pypi.vision.image_descriptor import ImageDescriptor
 
@@ -50,7 +49,6 @@ class DocumentProcessor:
         self._order_reconstructor = ReadingOrderReconstructor()
         self._noise_remover = NoiseRemover()
         self._section_classifier = SectionClassifier()
-        self._formatter = JSONFormatter()
         self._image_detector = SmartImageDetector()
         self._image_descriptor: Optional[ImageDescriptor] = None
 

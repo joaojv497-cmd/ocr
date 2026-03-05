@@ -11,8 +11,6 @@ from commons_pypi.llm_providers.factory import LLMProviderFactory
 
 from ocr_pypi.services.document_processor import DocumentProcessor
 from ocr_pypi.storage import get_storage
-from ocr_pypi.chunking.templates.registry import TemplateRegistry
-from ocr_pypi.chunking.templates.dynamic_template import DynamicTemplate
 
 import logging
 
@@ -58,15 +56,6 @@ CHUNKING_TO_PROTO = {
 tesseract_env = os.getenv("TESSERACT_CMD")
 if tesseract_env:
     pytesseract.pytesseract.tesseract_cmd = tesseract_env
-
-def _proto_section_to_dict(section_proto) -> Dict[str, Any]:
-    """Converts a TemplateSection proto message to a dict compatible with DynamicTemplate."""
-    return {
-        "name": section_proto.name,
-        "description": section_proto.description,
-        "required": section_proto.required,
-        "subsections": [_proto_section_to_dict(s) for s in section_proto.subsections],
-    }
 
 
 class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
@@ -147,19 +136,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
         providers = LLMProviderFactory.list_providers()
         return ocr_pb2.ListProvidersResponse(providers=providers)
 
-    def ListTemplates(self, request, context):
-        """Lista todos os templates de documentos disponíveis"""
-        templates = []
-        for name in TemplateRegistry.list_templates():
-            template = TemplateRegistry.get(name)
-            templates.append(ocr_pb2.TemplateInfo(
-                name=template.name,
-                description=template.description,
-                is_custom=template.is_custom,
-                document_types=template.document_types,
-            ))
-        return ocr_pb2.ListTemplatesResponse(templates=templates)
-
     def ValidateDocument(self, request, context):
         """Valida se documento existe e é suportado"""
         storage = get_storage(request.bucket)
@@ -178,48 +154,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
         return ocr_pb2.HealthCheckResponse(
             status=types_pb2.HealthStatus.HEALTH_SERVING,
             message="OCR Service running",
-        )
-
-    def ValidateTemplate(self, request, context):
-        """Valida a definição de um template customizado"""
-        template_proto = request.template
-        missing_fields = []
-        invalid_fields = []
-
-        if not template_proto.name:
-            return ocr_pb2.ValidateTemplateResponse(
-                is_valid=False,
-                validation_message="template.name is required",
-                missing_fields=["name"],
-                invalid_fields=[],
-            )
-
-        definition = {
-            "template_name": template_proto.name,
-            "description": template_proto.description,
-            "sections": [_proto_section_to_dict(s) for s in template_proto.sections],
-        }
-
-        try:
-            DynamicTemplate(definition)
-        except ValueError as e:
-            error_msg = str(e)
-            if not definition.get("template_name"):
-                missing_fields.append("template_name")
-            elif not isinstance(definition.get("sections"), list):
-                invalid_fields.append("sections")
-            return ocr_pb2.ValidateTemplateResponse(
-                is_valid=False,
-                validation_message=error_msg,
-                missing_fields=missing_fields,
-                invalid_fields=invalid_fields,
-            )
-
-        return ocr_pb2.ValidateTemplateResponse(
-            is_valid=True,
-            validation_message="Template is valid",
-            missing_fields=[],
-            invalid_fields=[],
         )
 
     def _map_stage(self, stage: str) -> int:
