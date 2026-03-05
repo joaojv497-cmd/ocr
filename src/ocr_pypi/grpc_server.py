@@ -45,13 +45,9 @@ PROTO_TO_CHUNKING = {
     types_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
 }
 
-CHUNKING_TO_PROTO = {
-    "page": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
-    "semantic": types_pb2.CHUNKING_METHOD_SEMANTIC,
-    "paragraph": types_pb2.CHUNKING_METHOD_PARAGRAPH,
-    "hybrid": types_pb2.CHUNKING_METHOD_HYBRID,
-    "image_description": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
-}
+
+# Method identifier for chunks generated via LLM image description (e.g., Vision API)
+IMAGE_DESCRIPTION_METHOD = "image_description"
 
 tesseract_env = os.getenv("TESSERACT_CMD")
 if tesseract_env:
@@ -103,16 +99,21 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
             if result["type"] == "chunk":
                 chunk = result["data"]
 
+                is_llm_generated = (
+                    chunk.metadata.get("chunking_method") == IMAGE_DESCRIPTION_METHOD
+                )
+                content_source = (
+                    types_pb2.CONTENT_SOURCE_LLM_GENERATED
+                    if is_llm_generated
+                    else types_pb2.CONTENT_SOURCE_OCR_EXTRACTION
+                )
+
                 yield ocr_pb2.ProcessDocumentResponse(
                     status=types_pb2.OCRStatus.PROCESSING,
-                    chunk_index=chunk.chunk_index,
                     page_numbers=chunk.page_numbers,
                     text=chunk.content,
                     chunk_metadata=json.dumps(chunk.metadata, ensure_ascii=False),
-                    chunking_method=CHUNKING_TO_PROTO.get(
-                        chunk.metadata.get("chunking_method", chunk_strategy),
-                        types_pb2.CHUNKING_METHOD_UNSPECIFIED,
-                    ),
+                    content_source=content_source,
                     template_used=template_used,
                 )
 
@@ -121,7 +122,6 @@ class OCRGrpcServer(ocr_pb2_grpc.OCRServiceServicer):
                     status=types_pb2.OCRStatus.COMPLETED,
                     stage=types_pb2.OCRStage.FINISHED,
                     total_chunks=result["total_chunks"],
-                    chunking_method=CHUNKING_TO_PROTO.get(chunk_strategy, types_pb2.CHUNKING_METHOD_UNSPECIFIED),
                     template_used=template_used,
                 )
 
