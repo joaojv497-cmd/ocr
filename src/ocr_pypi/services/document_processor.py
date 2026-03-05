@@ -144,25 +144,16 @@ class DocumentProcessor:
             pages_data = self._noise_remover.remove_noise(pages_data)
             yield {"type": "progress", "stage": "noise_removal_complete"}
 
-            # 6. Section classification per page + emit page_processed events
+            # 6. Section classification per page
             classified_pages = []
             for page in pages_data:
                 page = self._apply_section_classification_single(page)
                 classified_pages.append(page)
-                yield {
-                    "type": "page_processed",
-                    "data": {
-                        "page_number": page["page_number"],
-                        "text": page["text"],
-                        "metadata": {
-                            "blocks_count": len(page.get("blocks", [])),
-                        },
-                    },
-                }
             pages_data = classified_pages
             yield {"type": "progress", "stage": "section_classification_complete"}
 
             # 7. Image detection and description (optional), emitting per-image events
+            # Must run BEFORE page_processed events so descriptions are included
             detect_images = chunk_options.get("detect_images", True)
             if detect_images:
                 pages_data = yield from self._apply_image_detection(
@@ -170,7 +161,21 @@ class DocumentProcessor:
                 )
                 yield {"type": "progress", "stage": "image_detection_complete"}
 
-            # 8. Chunking (strategy-aware)
+            # 8. Emit page_processed events WITH image descriptions included
+            for page in pages_data:
+                yield {
+                    "type": "page_processed",
+                    "data": {
+                        "page_number": page["page_number"],
+                        "text": page["text"],
+                        "image_descriptions": page.get("image_descriptions", []),
+                        "metadata": {
+                            "blocks_count": len(page.get("blocks", [])),
+                        },
+                    },
+                }
+
+            # 9. Chunking (strategy-aware)
             yield from self._chunk_with_strategy(pages_data, chunk_options)
 
         except Exception as e:
