@@ -1,6 +1,7 @@
 """Geração de descrições de imagens usando LLM com suporte a visão."""
 import base64
 import logging
+import time
 from typing import List, Optional, Generator
 
 from commons_pypi.llm_providers.base_provider import LLMProvider
@@ -10,6 +11,15 @@ from ocr_pypi.config import settings
 from ocr_pypi.models.document import ImageDescription, ImageInfo
 
 logger = logging.getLogger(__name__)
+
+# Maximum number of retries for transient vision API errors
+_MAX_RETRIES = 1
+_RETRY_DELAY = 1.0
+
+
+class NoVisionSupportError(Exception):
+    """Raised when the configured LLM provider does not support image analysis."""
+
 
 JURIDIC_SYSTEM_PROMPT = (
     "Você é um assistente especializado em análise de documentos jurídicos brasileiros. "
@@ -131,11 +141,36 @@ class ImageDescriptor:
                 image_info=image_info,
                 description=description_text,
                 page_number=image_info.page_number,
+                success=True,
                 metadata={
                     "image_index": image_info.image_index,
                     "width": image_info.width,
                     "height": image_info.height,
                     "format": image_info.format,
+                    "processing_status": "success",
+                },
+            )
+        except NoVisionSupportError:
+            logger.warning(
+                f"Provider não suporta visão para imagem {image_info.image_index} "
+                f"da página {image_info.page_number}."
+            )
+            return ImageDescription(
+                image_info=image_info,
+                description=(
+                    f"❌ FALHA NO PROCESSAMENTO - Provider não suporta análise de imagens. "
+                    f"Imagem detectada mas não analisada "
+                    f"({image_info.width}x{image_info.height}px)."
+                ),
+                page_number=image_info.page_number,
+                success=False,
+                error_type="no_vision_support",
+                metadata={
+                    "image_index": image_info.image_index,
+                    "width": image_info.width,
+                    "height": image_info.height,
+                    "format": image_info.format,
+                    "processing_status": "failed",
                 },
             )
         except Exception as e:
@@ -143,33 +178,65 @@ class ImageDescriptor:
                 f"Erro ao descrever imagem {image_info.image_index} "
                 f"da página {image_info.page_number}: {e}"
             )
-            return None
+            return ImageDescription(
+                image_info=image_info,
+                description=(
+                    f"❌ FALHA NO PROCESSAMENTO - Erro ao processar imagem "
+                    f"({image_info.width}x{image_info.height}px)."
+                ),
+                page_number=image_info.page_number,
+                success=False,
+                error_type="processing_error",
+                metadata={
+                    "image_index": image_info.image_index,
+                    "width": image_info.width,
+                    "height": image_info.height,
+                    "format": image_info.format,
+                    "processing_status": "failed",
+                },
+            )
 
     def _call_vision_llm(self, image_info: ImageInfo) -> str:
         """
         Chama a LLM com a imagem em base64.
 
-        Tenta usar o método `generate_with_image` se disponível no provider;
-        caso contrário, tenta `generate` com prompt de texto apenas como fallback.
+        Usa o método `generate_with_image` se disponível no provider;
+        caso contrário, levanta `NoVisionSupportError`.  Erros transientes
+        são retentados até `_MAX_RETRIES` vezes antes de propagar a exceção.
         """
-        image_b64 = base64.b64encode(image_info.image_data).decode("utf-8")
-
-        # Try vision-capable method first
-        if hasattr(self.provider, "generate_with_image"):
-            return self.provider.generate_with_image(
-                prompt=self._vision_prompt,
-                image_base64=image_b64,
-                image_mime_type="image/png",
+        if not hasattr(self.provider, "generate_with_image"):
+            logger.warning(
+                "Provider não suporta visão; não é possível analisar a imagem."
+            )
+            raise NoVisionSupportError(
+                f"Provider '{self.provider}' does not support image analysis."
             )
 
-        # Fallback: describe without actual image (text-only context)
-        logger.debug(
-            "Provider não suporta visão; usando fallback de descrição por posição."
-        )
-        fallback_prompt = (
-            f"Uma imagem foi encontrada na página {image_info.page_number} "
-            f"do documento (largura={image_info.width}px, altura={image_info.height}px). "
-            "Não é possível processar a imagem diretamente. "
-            "Registre que há uma imagem nesta posição do documento."
-        )
-        return self.provider.generate(fallback_prompt)
+        image_b64 = base64.b64encode(image_info.image_data).decode("utf-8")
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return self.provider.generate_with_image(
+                    prompt=self._vision_prompt,
+                    image_base64=image_b64,
+                    image_mime_type="image/png",
+                )
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    logger.debug(
+                        f"Tentativa {attempt + 1} de visão falhou "
+                        f"(imagem {image_info.image_index}, "
+                        f"página {image_info.page_number}): {exc}. Retentando..."
+                    )
+                    time.sleep(_RETRY_DELAY)
+                else:
+                    logger.debug(
+                        f"Todas as tentativas falharam para imagem "
+                        f"{image_info.image_index}, página {image_info.page_number}."
+                    )
+
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Nenhuma tentativa de visão foi executada.")
