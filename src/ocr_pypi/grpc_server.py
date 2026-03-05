@@ -40,16 +40,16 @@ LANGUAGE_TO_PROTO = {v: k for k, v in PROTO_TO_LANGUAGE.items()}
 
 PROTO_TO_CHUNKING = {
     types_pb2.CHUNKING_METHOD_UNSPECIFIED: "page",
-    types_pb2.CHUNKING_METHOD_LLM: "page",
     types_pb2.CHUNKING_METHOD_SEMANTIC: "semantic",
     types_pb2.CHUNKING_METHOD_PARAGRAPH: "paragraph",
-    types_pb2.CHUNKING_METHOD_HYBRID: "page",
+    types_pb2.CHUNKING_METHOD_HYBRID: "hybrid",
 }
 
 CHUNKING_TO_PROTO = {
     "page": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
     "semantic": types_pb2.CHUNKING_METHOD_SEMANTIC,
     "paragraph": types_pb2.CHUNKING_METHOD_PARAGRAPH,
+    "hybrid": types_pb2.CHUNKING_METHOD_HYBRID,
     "image_description": types_pb2.CHUNKING_METHOD_UNSPECIFIED,
 }
 
