@@ -70,6 +70,9 @@ class DocumentProcessor:
             - llm_max_tokens: max tokens (used for image description)
             - llm_system_prompt: system prompt for text LLM calls (image description)
             - llm_vision_prompt: vision system prompt for image LLM calls
+            - vision_max_width: max image width (px) sent to Vision LLM
+            - vision_max_height: max image height (px) sent to Vision LLM
+            - vision_jpeg_quality: JPEG quality (1–95) for Vision LLM images
             - chunk_size: max chunk chars (semantic/paragraph strategies)
             - chunk_overlap: overlap chars (paragraph strategy)
             - min_chunk_size: minimum chunk chars (semantic/paragraph)
@@ -236,6 +239,9 @@ class DocumentProcessor:
                 max_tokens=chunk_options.get("llm_max_tokens"),
                 system_prompt=chunk_options.get("llm_system_prompt"),
                 vision_system_prompt=chunk_options.get("llm_vision_prompt"),
+                vision_max_width=chunk_options.get("vision_max_width"),
+                vision_max_height=chunk_options.get("vision_max_height"),
+                vision_jpeg_quality=chunk_options.get("vision_jpeg_quality"),
             )
         return self._image_descriptor
 

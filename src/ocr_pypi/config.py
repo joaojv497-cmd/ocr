@@ -39,4 +39,9 @@ class Settings:
     LLM_SYSTEM_PROMPT: str = os.getenv("LLM_SYSTEM_PROMPT") or None
     LLM_VISION_PROMPT: str = os.getenv("LLM_VISION_PROMPT") or None
 
+    # Vision LLM image preprocessing settings
+    VISION_MAX_WIDTH: int = int(os.getenv("VISION_MAX_WIDTH", "1024"))
+    VISION_MAX_HEIGHT: int = int(os.getenv("VISION_MAX_HEIGHT", "1024"))
+    VISION_JPEG_QUALITY: int = int(os.getenv("VISION_JPEG_QUALITY", "85"))
+
 settings = Settings()

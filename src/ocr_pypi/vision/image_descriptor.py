@@ -1,14 +1,18 @@
 """Geração de descrições de imagens usando LLM com suporte a visão."""
 import base64
+import io
 import logging
 import time
 from typing import List, Optional, Generator
+
+from PIL import Image
 
 from commons_pypi.llm_providers.base_provider import LLMProvider
 from commons_pypi.llm_providers.factory import LLMProviderFactory
 
 from ocr_pypi.config import settings
 from ocr_pypi.models.document import ImageDescription, ImageInfo
+from ocr_pypi.preprocessing.image_preprocessor import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,9 @@ class ImageDescriptor:
         max_tokens: int = None,
         system_prompt: str = None,
         vision_system_prompt: str = None,
+        vision_max_width: int = None,
+        vision_max_height: int = None,
+        vision_jpeg_quality: int = None,
     ):
         """
         Inicializa o ImageDescriptor.
@@ -72,6 +79,14 @@ class ImageDescriptor:
                 não informado (ou ``None``), usa ``settings.LLM_VISION_PROMPT``
                 (variável de ambiente ``LLM_VISION_PROMPT``) quando definida, ou
                 o padrão jurídico ``JURIDIC_VISION_PROMPT`` como fallback final.
+            vision_max_width: Maximum width in pixels for vision preprocessing.
+                Defaults to ``settings.VISION_MAX_WIDTH``.
+            vision_max_height: Maximum height in pixels for vision preprocessing.
+                Defaults to ``settings.VISION_MAX_HEIGHT``.
+            vision_jpeg_quality: JPEG quality (1–95) for vision preprocessing.
+                Values above 95 disable JPEG compression optimisations and
+                produce disproportionately large files.
+                Defaults to ``settings.VISION_JPEG_QUALITY``.
         """
         resolved_system_prompt = (
             system_prompt
@@ -98,6 +113,10 @@ class ImageDescriptor:
             )
 
         self._vision_prompt = resolved_vision_prompt
+        self._preprocessor = ImagePreprocessor()
+        self._vision_max_width = vision_max_width if vision_max_width is not None else settings.VISION_MAX_WIDTH
+        self._vision_max_height = vision_max_height if vision_max_height is not None else settings.VISION_MAX_HEIGHT
+        self._vision_jpeg_quality = vision_jpeg_quality if vision_jpeg_quality is not None else settings.VISION_JPEG_QUALITY
         logger.info(f"ImageDescriptor inicializado com {self.provider}")
 
     def describe_images(
@@ -198,9 +217,11 @@ class ImageDescriptor:
         """
         Chama a LLM com a imagem em base64.
 
-        Usa o método `generate_with_image` se disponível no provider;
-        caso contrário, levanta `NoVisionSupportError`.  Erros transientes
-        são retentados até `_MAX_RETRIES` vezes antes de propagar a exceção.
+        Preprocessa a imagem (redimensionamento + compressão JPEG) antes do envio
+        para reduzir custos de token.  Usa o método ``generate_with_image`` se
+        disponível no provider; caso contrário, levanta ``NoVisionSupportError``.
+        Erros transientes são retentados até ``_MAX_RETRIES`` vezes antes de
+        propagar a exceção.
         """
         if not hasattr(self.provider, "generate_with_image"):
             logger.warning(
@@ -210,7 +231,22 @@ class ImageDescriptor:
                 f"Provider '{self.provider}' does not support image analysis."
             )
 
-        image_b64 = base64.b64encode(image_info.image_data).decode("utf-8")
+        try:
+            pil_img = Image.open(io.BytesIO(image_info.image_data))
+            jpeg_bytes = self._preprocessor.preprocess_for_vision(
+                pil_img,
+                max_width=self._vision_max_width,
+                max_height=self._vision_max_height,
+                jpeg_quality=self._vision_jpeg_quality,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Falha ao preprocessar imagem {image_info.image_index} "
+                f"para visão: {e}. Usando dados originais."
+            )
+            jpeg_bytes = image_info.image_data
+
+        image_b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
 
         last_exc: Optional[Exception] = None
         for attempt in range(_MAX_RETRIES + 1):
@@ -218,7 +254,7 @@ class ImageDescriptor:
                 return self.provider.generate_with_image(
                     prompt=self._vision_prompt,
                     image_base64=image_b64,
-                    image_mime_type="image/png",
+                    image_mime_type="image/jpeg",
                 )
             except Exception as exc:
                 last_exc = exc
