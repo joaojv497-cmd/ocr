@@ -35,4 +35,8 @@ class Settings:
     SIMILARITY_THRESHOLD: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
     TESSERACT_CMD:  str = os.getenv("TESSERACT_CMD")
 
+    # LLM prompts (configurable via environment variables)
+    LLM_SYSTEM_PROMPT: str = os.getenv("LLM_SYSTEM_PROMPT") or None
+    LLM_VISION_PROMPT: str = os.getenv("LLM_VISION_PROMPT") or None
+
 settings = Settings()

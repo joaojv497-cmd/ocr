@@ -68,6 +68,8 @@ class DocumentProcessor:
             - llm_api_key: API key (used for image description)
             - llm_temperature: temperature (used for image description)
             - llm_max_tokens: max tokens (used for image description)
+            - llm_system_prompt: system prompt for text LLM calls (image description)
+            - llm_vision_prompt: vision system prompt for image LLM calls
             - chunk_size: max chunk chars (semantic/paragraph strategies)
             - chunk_overlap: overlap chars (paragraph strategy)
             - min_chunk_size: minimum chunk chars (semantic/paragraph)
@@ -232,6 +234,8 @@ class DocumentProcessor:
                 model=chunk_options.get("llm_model"),
                 temperature=chunk_options.get("llm_temperature"),
                 max_tokens=chunk_options.get("llm_max_tokens"),
+                system_prompt=chunk_options.get("llm_system_prompt"),
+                vision_system_prompt=chunk_options.get("llm_vision_prompt"),
             )
         return self._image_descriptor
 
